@@ -119,8 +119,8 @@ class GyroEnvV1(gym.Env):
            tau]).T  #torque applied to the gyroscope (so that it rotates)
 
         #Rate of change of state vector
-        bdot[0:2]=b[3:5]
-        bdot[3:5]=np.matmul(np.linalg.inv(H),(F-d-np.matmul(K,gamma)-np.matmul(B,dotgamma)-np.matmul(C,np.sign(dotgamma))))
+        bdot[0:3]=b[3:6]
+        bdot[3:6]=np.matmul(np.linalg.inv(H),(F-d-np.matmul(K,gamma)-np.matmul(B,dotgamma)-np.matmul(C,np.sign(dotgamma))))
         return bdot
 
     def get_state(self):
