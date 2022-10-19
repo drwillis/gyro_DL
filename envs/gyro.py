@@ -96,12 +96,14 @@ class GyroEnvV1(gym.Env):
         # cx=params(10)  #Coulombic Friction in sensing direction
 
         #System Mass matrix
-        H=np.array([[self.m,0,-self.m*y,0],[self.m,self.m*x,-self.m*y],[self.m*x,self.m*(x^2+y^2)+self.Jzz]])
+        H=np.array([[self.m,0,-self.m*y],
+                    [0,self.m,self.m*x],
+                    [-self.m*y,self.m*x,self.m*(x**2+y**2)+self.Jzz]])
 
         #Coriolis and Centripital force vector
-        d=np.array([-2*self.m*doty*dottheta-self.m*x*dottheta^2,
-                    2*self.m*dotx*dottheta-self.m*y*dottheta^2,
-                    2*self.m*x*dotx*dottheta+2*self.m*y*doty*dottheta])
+        d=np.array([-2*self.m*doty*dottheta-self.m*x*dottheta**2,
+                    2*self.m*dotx*dottheta-self.m*y*dottheta**2,
+                    2*self.m*x*dotx*dottheta+2*self.m*y*doty*dottheta]).T
 
         #Spring constant matrix
         K=np.diag([self.kx,self.ky,0])
@@ -129,10 +131,10 @@ class GyroEnvV1(gym.Env):
         thetadot = self.state[5]
 
         dt = self.dt
-        tau = u
+        tau = u[0]
         # u = np.clip(u, -self.max_torque, self.max_torque)[0]
         self.last_u = u # for rendering
-        costs = angle_normalize(theta)**2 + .1*thetadot**2 + .001*(u**2)
+        costs = angle_normalize(theta)**2 + .1*thetadot**2 + .001*(tau**2)
 
         ivp = solve_ivp(fun=lambda t, y:self.dynamics(t, y, tau), t_span=[0, self.dt], y0=self.state)
         self.state = ivp.y[:, -1]
@@ -141,7 +143,9 @@ class GyroEnvV1(gym.Env):
 
     def reset(self, ori_rep = 'angle'):
         high = np.array([np.pi, 1])
+        # self.state = self.np_random.uniform(low=-high, high=high)
         self.state = self.np_random.uniform(low=-high, high=high)
+        self.state = np.array([0,0,0,0,0,0]).T
         self.last_u = None
         # Orientation representations: 'angle', 'rotmat'
         self.ori_rep = ori_rep
