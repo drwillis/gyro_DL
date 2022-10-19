@@ -16,8 +16,8 @@ PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(PARENT_DIR)
 
 from se3hamneuralode import MLP, PSD
-from se3hamneuralode import SO3HamNODE
-from data import get_dataset, arrange_data
+from se3hamneuralode import gyroHamNODE
+from data_gyro import get_dataset, arrange_data
 from se3hamneuralode import to_pickle, rotmat_L2_geodesic_loss, traj_rotmat_L2_geodesic_loss
 
 def get_args():
@@ -57,7 +57,7 @@ def train(args):
     # Initialize the model
     if args.verbose:
         print("Start training with num of points = {} and solver {}.".format(args.num_points, args.solver))
-    model = SO3HamNODE(device=device, u_dim = 1).to(device)
+    model = gyroHamNODE(device=device, u_dim = 1).to(device)
     num_parm = get_model_parm_nums(model)
     print('model contains {} parameters'.format(num_parm))
     optim = torch.optim.Adam(model.parameters(), args.learn_rate, weight_decay=1e-4)

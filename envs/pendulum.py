@@ -41,6 +41,9 @@ class PendulumEnvV1(gym.Env):
 
 
     def dynamics(self, t, y, u):
+        # y[0] is angle, y[1] is angular velocity
+        # f[0] = angular velocity
+        # f[1] = angular acceleration
         g = self.g
         m = 1.
         l = 1.
