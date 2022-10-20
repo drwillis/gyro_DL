@@ -40,9 +40,12 @@ class GyroEnvV1(gym.Env):
         self.g = g
         self.viewer = None
 
+        # high = np.array([1., 1., self.max_speed])
         high = np.array([1., 1., self.max_speed])
-        self.action_space = spaces.Box(low=-self.max_torque, high=self.max_torque, shape=(1,), dtype=np.float32)
-        self.observation_space = spaces.Box(low=-high, high=high, dtype=np.float32)
+        # self.action_space = spaces.Box(low=-self.max_torque, high=self.max_torque, shape=(1,), dtype=np.float32)
+        # self.observation_space = spaces.Box(low=-high, high=high, dtype=np.float32)
+        self.action_space = spaces.Box(low=-self.max_torque, high=self.max_torque, shape=(1,), dtype=np.double)
+        self.observation_space = spaces.Box(low=-high, high=high, dtype=np.double)
 
         # Orientation representations: 'angle', 'rotmat'
         self.ori_rep = ori_rep

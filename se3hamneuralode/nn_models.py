@@ -25,7 +25,7 @@ class MLP(torch.nn.Module):
 
 
 class PSD(torch.nn.Module):
-    '''A positive semi-definite matrix of the form LL^T + epsilon where L is a neural network'''
+    '''A positive semi definite matrix of the form LL^T + epsilon where L is a neural network'''
     def __init__(self, input_dim, hidden_dim, diag_dim, nonlinearity='tanh', init_gain = 1.0):
         super(PSD, self).__init__()
         self.diag_dim = diag_dim

@@ -7,7 +7,7 @@ import gym
 import envs
 
 def sample_gym(seed=0, timesteps=10, trials=50, min_angle=0., 
-              verbose=False, u=0.0, env_name='MyGyro-v1', ori_rep = 'rotmat', friction = False, render = False):
+              verbose=False, u=0.0, env_name='MyGyro-v1', ori_rep = 'rotmat', dt=0.05, friction = False, render = False):
     
     gym_settings = locals()
     if verbose:
@@ -25,9 +25,6 @@ def sample_gym(seed=0, timesteps=10, trials=50, min_angle=0.,
             env.reset(ori_rep=ori_rep)
             traj = []
             for step in range(timesteps):
-                t = step*dt
-                tau=0.5*np.square(2*np.pi*t*(1/2))-.25;  # torque applied to gyroscope.  Modify this signal to obtain different data sets
-                u = tau
                 if render:
                     env.render()
                 obs, _, _, _ = env.step([u]) # action
@@ -39,11 +36,11 @@ def sample_gym(seed=0, timesteps=10, trials=50, min_angle=0.,
         trajs.append(traj)
     trajs = np.stack(trajs) # (trials, timesteps, 2)
     trajs = np.transpose(trajs, (1, 0, 2)) # (timesteps, trails, 2)
-    tspan = np.arange(timesteps) * 0.05
+    tspan = np.arange(timesteps) * dt
     return trajs, tspan, gym_settings
 
 
-def get_dataset(seed=0, samples=50, test_split=0.5, save_dir=None, us=[0], rad=False, ori_rep = 'rotmat', friction = False, **kwargs):
+def get_dataset(seed=0, samples=50, test_split=0.5, save_dir=None, us=[0], dt=0.05, rad=False, ori_rep = 'rotmat', friction = False, **kwargs):
     data = {}
 
     assert save_dir is not None
@@ -55,7 +52,7 @@ def get_dataset(seed=0, samples=50, test_split=0.5, save_dir=None, us=[0], rad=F
         print("Had a problem loading data from {}. Rebuilding dataset...".format(path))
         trajs_force = []
         for u in us:
-            trajs, tspan, _ = sample_gym(seed=seed, trials=samples, u=u, ori_rep = ori_rep, friction = friction, **kwargs)
+            trajs, tspan, _ = sample_gym(seed=seed, trials=samples, u=u, ori_rep = ori_rep, friction = friction, dt=dt, **kwargs)
             trajs_force.append(trajs)
         data['x'] = np.stack(trajs_force, axis=0) # (3, 45, 50, 3)
         # make a train/test split
@@ -86,12 +83,16 @@ def arrange_data(x, t, num_points=2):
 
 if __name__ == "__main__":
     #us = [0.0, -1.0, 1.0, -2.0, 2.0]
-    us = [0.0]
+    us = [0.0, -0.25, 0.25]
     #trajs, tspan, _  = sample_gym(seed=0, trials=50, u=us[0], timesteps=20, ori_rep='6d')
     # t_final = 2.5;
-    t_final = 1.0;
-    dt = 0.0001;
+    t_final = .01
+    dt = 0.0001
     timesteps = int(t_final/dt)
-    # data = get_dataset(seed=0, timesteps=20, save_dir='data', us=us, samples=128)
-    trajs, tspan, _  = sample_gym(seed=0, trials=50, u=us[0], timesteps = timesteps, ori_rep='angle', render = False)
+    times = np.arange(timesteps)*dt
+    taus = 0.5 * np.square(np.pi * times) - 0.25
+    # us = taus
+
+    data = get_dataset(seed=0, timesteps=timesteps, save_dir='data', us=us, ori_rep='angle', samples=50, dt=dt)
+    # trajs, tspan, _  = sample_gym(seed=0, trials=50, u=us[0], timesteps = timesteps, dt=dt, ori_rep='angle', render = False)
     print("Done!")
