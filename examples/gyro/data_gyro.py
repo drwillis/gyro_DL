@@ -11,7 +11,7 @@ def sample_gym(seed=0, timesteps=10, trials=50, min_angle=0.,
     
     gym_settings = locals()
     if verbose:
-        print("Making a dataset of Pendulum observations.")
+        print("Making a dataset of mems gyroscope observations.")
     env = gym.make(env_name)
     env.seed(seed)
     env.friction = friction
@@ -47,7 +47,7 @@ def get_dataset(seed=0, samples=50, test_split=0.5, save_dir=None, us=[0], rad=F
     data = {}
 
     assert save_dir is not None
-    path = '{}/pendulum-gym-dataset.pkl'.format(save_dir)
+    path = '{}/gyro-gym-dataset.pkl'.format(save_dir)
     try:
         data = from_pickle(path)
         print("Successfully loaded data from {}".format(path))
@@ -87,10 +87,11 @@ def arrange_data(x, t, num_points=2):
 if __name__ == "__main__":
     #us = [0.0, -1.0, 1.0, -2.0, 2.0]
     us = [0.0]
-    #data = get_dataset(seed=0, timesteps=20, save_dir=None, us=us, samples=128)
     #trajs, tspan, _  = sample_gym(seed=0, trials=50, u=us[0], timesteps=20, ori_rep='6d')
-    t_final = 2.5;
+    # t_final = 2.5;
+    t_final = 1.0;
     dt = 0.0001;
-    timesteps = t_final/dt
-    trajs, tspan, _  = sample_gym(seed=0, trials=50, u=us[0], timesteps=20, ori_rep='angle')
+    timesteps = int(t_final/dt)
+    # data = get_dataset(seed=0, timesteps=20, save_dir='data', us=us, samples=128)
+    trajs, tspan, _  = sample_gym(seed=0, trials=50, u=us[0], timesteps = timesteps, ori_rep='angle', render = False)
     print("Done!")

@@ -58,7 +58,7 @@ class GyroEnvV1(gym.Env):
         # y[0] is angle, y[1] is angular velocity
         # f[0] = angular velocity
         # f[1] = angular acceleration
-        g = self.g
+        #g = self.g
         #m = 1.
         #l = 1.
         #friction = 0.3*y[1] if self.friction else 0.0
@@ -133,7 +133,7 @@ class GyroEnvV1(gym.Env):
         dt = self.dt
         tau = u[0]
         # u = np.clip(u, -self.max_torque, self.max_torque)[0]
-        self.last_u = u # for rendering
+        self.last_u = u[0] # for rendering
         costs = angle_normalize(theta)**2 + .1*thetadot**2 + .001*(tau**2)
 
         ivp = solve_ivp(fun=lambda t, y:self.dynamics(t, y, tau), t_span=[0, self.dt], y0=self.state)
@@ -144,7 +144,6 @@ class GyroEnvV1(gym.Env):
     def reset(self, ori_rep = 'angle'):
         high = np.array([np.pi, 1])
         # self.state = self.np_random.uniform(low=-high, high=high)
-        self.state = self.np_random.uniform(low=-high, high=high)
         self.state = np.array([0,0,0,0,0,0]).T
         self.last_u = None
         # Orientation representations: 'angle', 'rotmat'
@@ -152,11 +151,15 @@ class GyroEnvV1(gym.Env):
         return self._get_obs()
 
     def _get_obs(self):
+        x=self.state[0]
+        y=self.state[1]
         theta = self.state[2] # th := theta
+        xdot=self.state[3]
+        ydot=self.state[4]
         thetadot = self.state[5]
         w = np.array([0.0, 0.0, thetadot])
         if self.ori_rep == 'angle':
-            ret = np.array([np.cos(theta), np.sin(theta), thetadot])
+            ret = np.array([np.cos(theta), np.sin(theta), x**2 + y**2, xdot**2 + ydot**2, thetadot])
         if self.ori_rep == 'rotmat':
             R = np.array([[np.cos(theta), -np.sin(theta), 0.0],
                           [np.sin(theta),  np.cos(theta), 0.0],
