@@ -22,7 +22,7 @@ class SE3HamNODE(torch.nn.Module):
         self.Rdim = 9
         self.linveldim = 3
         self.angveldim = 3
-        self.posedim = self.xdim + self.Rdim #3 for position + 12 for rotmat
+        self.posedim = self.xdim + self.Rdim #3 for position + 9 for rotmat
         self.twistdim = self.linveldim + self.angveldim #3 for linear vel + 3 for ang vel
         self.udim = udim
         if M_net1 is None:

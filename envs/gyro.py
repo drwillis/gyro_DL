@@ -160,14 +160,16 @@ class GyroEnvV1(gym.Env):
         xdot=self.state[3]
         ydot=self.state[4]
         thetadot = self.state[5]
-        w = np.array([0.0, 0.0, thetadot])
+        w_vec = np.array([0.0, 0.0, thetadot])
         if self.ori_rep == 'angle':
             ret = np.array([np.cos(theta), np.sin(theta), x**2 + y**2, xdot**2 + ydot**2, thetadot])
         if self.ori_rep == 'rotmat':
+            x_vec = np.array([x y 0])
             R = np.array([[np.cos(theta), -np.sin(theta), 0.0],
                           [np.sin(theta),  np.cos(theta), 0.0],
                           [0.0,            0.0,           1.0]])
-            ret = np.hstack((R.flatten(), w))
+            v_vec = np.array([xdot ydot 0])
+            ret = np.hstack((x_vec, R.flatten(), v_vec, w_vec))
         return ret
 
     def render(self, mode='human'):

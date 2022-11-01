@@ -19,7 +19,7 @@ class gyroHamNODE(torch.nn.Module):
     def __init__(self, M_net = None, V_net = None, g_net = None, device=None, u_dim=3, init_gain=1):
         super(gyroHamNODE, self).__init__()
         self.rotmatdim = 9
-        self.angveldim = 6
+        self.angveldim = 3
         if M_net is None:
             self.M_net = PSD(self.rotmatdim, 300, self.angveldim, init_gain=init_gain).to(device)
         else:
