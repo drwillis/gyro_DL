@@ -186,8 +186,8 @@ M_q_inv = model.M_net(R)
 V_q = V_q.detach().cpu().numpy()
 M_q_inv = M_q_inv.detach().cpu().numpy()
 
-# Determine the scaling factor beta and the potential_energy_offset from analyze_pend_SO3.py's results.
-# This should be changed according to analyze_pend_SO3.py if we have new results.
+# Determine the scaling factor beta and the potential_energy_offset from analyze_gyro_SO3.py's results.
+# This should be changed according to analyze_gyro_SO3.py if we have new results.
 scaling_factor = 2.32
 potential_energy_offset = 5.1
 total_energy_learned = []

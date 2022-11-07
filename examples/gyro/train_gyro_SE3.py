@@ -55,7 +55,7 @@ def train(args):
     # Initialize the model
     if args.verbose:
         print("Start training with num of points = {} and solver {}.".format(args.num_points, args.solver))
-    model = SE3HamNODE(device=device, pretrain = True).to(device)
+    model = SE3HamNODE(device=device, pretrain=True, udim=1).to(device)
     # Load saved params if needed
     #path = '{}/quadrotor-se3ham-rk4-5p2-2000.tar'.format(args.save_dir)
     #model.load_state_dict(torch.load(path, map_location=device))
