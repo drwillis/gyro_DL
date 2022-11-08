@@ -11,7 +11,7 @@ import os, sys
 from torchdiffeq import odeint_adjoint as odeint
 from se3hamneuralode import MLP, PSD
 from se3hamneuralode import SE3HamNODE
-from data_collection import get_dataset, arrange_data
+from data_gyro import get_dataset, arrange_data
 from se3hamneuralode import to_pickle, pose_L2_geodesic_loss, traj_pose_L2_geodesic_loss
 import time
 
@@ -25,7 +25,7 @@ def get_args():
     parser.add_argument('--nonlinearity', default='tanh', type=str, help='neural net nonlinearity')
     parser.add_argument('--total_steps', default=500, type=int, help='number of gradient steps')
     parser.add_argument('--print_every', default=100, type=int, help='number of gradient steps between prints')
-    parser.add_argument('--name', default='quadrotor', type=str, help='only one option right now')
+    parser.add_argument('--name', default='gyro', type=str, help='only one option right now')
     parser.add_argument('--verbose', dest='verbose', action='store_true', help='verbose?')
     parser.add_argument('--seed', default=0, type=int, help='random seed')
     parser.add_argument('--save_dir', default=THIS_DIR, type=str, help='where to save the trained model')

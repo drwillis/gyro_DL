@@ -93,6 +93,6 @@ if __name__ == "__main__":
     taus = 0.5 * np.square(np.pi * times) - 0.25
     # us = taus
 
-    data = get_dataset(seed=0, timesteps=timesteps, save_dir='data', us=us, ori_rep='angle', samples=50, dt=dt)
+    data = get_dataset(seed=0, timesteps=timesteps, save_dir='data', us=us, ori_rep='rotmat', samples=50, dt=dt)
     # trajs, tspan, _  = sample_gym(seed=0, trials=50, u=us[0], timesteps = timesteps, dt=dt, ori_rep='angle', render = False)
     print("Done!")

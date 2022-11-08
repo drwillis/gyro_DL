@@ -83,7 +83,7 @@ def compute_rotation_matrix_from_quaternion(quaternion):
     qy = quat[..., 2].contiguous().view(batch, 1)
     qz = quat[..., 3].contiguous().view(batch, 1)
 
-    # Unit quaternion rotation matrices computatation
+    # Unit quaternion rotation matrices computation
     xx = qx * qx
     yy = qy * qy
     zz = qz * qz
