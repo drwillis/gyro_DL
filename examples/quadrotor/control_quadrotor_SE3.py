@@ -91,9 +91,9 @@ def control_pybullet_drone_demo():
     curr_traj_s[-1] = t_curr
     s_traj.append(curr_traj_s)
 
-    # Build conversion matrix betweek force/torch and the motor speeds.
+    # Build conversion matrix between force/torque and the motor speeds.
     # We need this because the pybullet drone environment takes motor speeds as input,
-    # while in our setting, the control input is force/torch.
+    # while in our setting, the control input is force/torque.
     r = env.KM / env.KF
     conversion_mat = np.array([[1.0, 1.0, 1.0, 1.0],
                                [0.0, env.L, 0.0, -env.L],
