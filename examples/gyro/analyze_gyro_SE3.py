@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import scipy.integrate
 solve_ivp = scipy.integrate.solve_ivp
 from se3hamneuralode import L2_loss, from_pickle, MLP, PSD, SE3HamNODE
+from data_gyro import sample_gym
 
 plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
@@ -43,6 +44,61 @@ if __name__ == "__main__":
     test_x = stats['test_x']
     t_eval = stats['t_eval']
     print("Loaded data!")
+
+    t_final = .01
+    dt = 0.001;
+    timesteps = int(t_final/dt)
+    times = np.arange(timesteps)*dt
+    # taus = 0.5 * np.square(np.pi * times) - 0.25
+
+    trajs, tspan, _ = sample_gym(seed=0, trials=timesteps, u=0.25, ori_rep='rotmat', dt=dt)
+    fig = plt.figure(figsize=(10,7.5))
+    ax_px = plt.subplot(421)
+    ax_py = plt.subplot(423)
+    ax_th = plt.subplot(425)
+
+    ax_vx = plt.subplot(422)
+    ax_vy = plt.subplot(424)
+    ax_thdot = plt.subplot(426)
+
+    ax_px.plot(trajs[:, -1], trajs[:, 0])
+    ax_px.plot(tspan[:, -1], tspan[:, 0])
+    ax_px.set_ylabel('x (m)')
+
+    ax_py.plot(trajs[:, -1], trajs[:, 1])
+    ax_py.plot(tspan[:, -1], tspan[:, 1])
+    ax_py.set_ylabel('y (m)')
+
+    # ax_vx.plot(trajs[:, -1], trajs[:, 3])
+    # ax_vx.plot(s_plan[:, -1], s_plan[:, 3])
+    # ax_vx.set_ylabel('x (m/s)')
+    #
+    # ax_vy.plot(s_traj[:, -1], s_traj[:, 4])
+    # ax_vy.plot(s_plan[:, -1], s_plan[:, 4])
+    # ax_vy.set_ylabel('y (m/s)')
+    #
+    # ax_vz.plot(s_traj[:, -1], s_traj[:, 5])
+    # ax_vz.plot(s_plan[:, -1], s_plan[:, 5])
+    # ax_vz.set_ylabel('z (m/s)')
+    #
+    # ax_yaw.plot(s_traj[:, -1], s_traj[:, 9])
+    # ax_yaw.plot(s_plan[:, -1], s_plan[:, 9])
+    # ax_yaw.set_ylabel('yaw (rad)')
+    #
+    # ax_w.plot(s_traj[:, -1], s_traj[:, 10])
+    # ax_w.plot(s_traj[:, -1], s_traj[:, 11])
+    # ax_w.plot(s_traj[:, -1], s_traj[:, 12])
+    # ax_w.plot(s_traj[:, -1], 0*s_traj[:, -1])
+    # ax_w.set_ylabel(r'$\omega$ (rad/s)')
+    #
+    # ax_px.set_title('Position/Yaw')
+    # ax_vx.set_title('Velocity')
+    # ax_yaw.set_xlabel('Time (s)')
+    # ax_w.set_xlabel('Time (s)')
+
+    plt.subplots_adjust(left=0.1, right=0.98, top=0.93, wspace=0.3)
+    #plt.savefig('./png/tracking_results.pdf', bbox_inches='tight', pad_inches=0.1)
+    plt.show()
 
     # Plot loss
     fig = plt.figure(figsize=figsize)
