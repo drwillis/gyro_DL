@@ -46,13 +46,14 @@ if __name__ == "__main__":
     print("Loaded data!")
 
     t_final = .01
-    dt = 0.001;
+    dt = 0.001
     timesteps = int(t_final/dt)
     times = np.arange(timesteps)*dt
     # taus = 0.5 * np.square(np.pi * times) - 0.25
 
-    trajs, tspan, _ = sample_gym(seed=0, trials=timesteps, u=0.25, ori_rep='rotmat', dt=dt)
-    fig = plt.figure(figsize=(10,7.5))
+    trajs, tspan, _ = sample_gym(seed=0, trials=1, u=0.25, ori_rep='rotmat', dt=dt)
+    figsize = (10, 7.5)
+    fig = plt.figure(figsize=figsize)
     ax_px = plt.subplot(421)
     ax_py = plt.subplot(423)
     ax_th = plt.subplot(425)
@@ -61,40 +62,28 @@ if __name__ == "__main__":
     ax_vy = plt.subplot(424)
     ax_thdot = plt.subplot(426)
 
-    ax_px.plot(trajs[:, -1], trajs[:, 0])
-    ax_px.plot(tspan[:, -1], tspan[:, 0])
+    ax_px.plot(tspan, trajs[:, :, 0])
     ax_px.set_ylabel('x (m)')
 
-    ax_py.plot(trajs[:, -1], trajs[:, 1])
-    ax_py.plot(tspan[:, -1], tspan[:, 1])
+    ax_py.plot(tspan, trajs[:, :, 1])
     ax_py.set_ylabel('y (m)')
 
-    # ax_vx.plot(trajs[:, -1], trajs[:, 3])
-    # ax_vx.plot(s_plan[:, -1], s_plan[:, 3])
-    # ax_vx.set_ylabel('x (m/s)')
-    #
-    # ax_vy.plot(s_traj[:, -1], s_traj[:, 4])
-    # ax_vy.plot(s_plan[:, -1], s_plan[:, 4])
-    # ax_vy.set_ylabel('y (m/s)')
-    #
-    # ax_vz.plot(s_traj[:, -1], s_traj[:, 5])
-    # ax_vz.plot(s_plan[:, -1], s_plan[:, 5])
-    # ax_vz.set_ylabel('z (m/s)')
-    #
-    # ax_yaw.plot(s_traj[:, -1], s_traj[:, 9])
-    # ax_yaw.plot(s_plan[:, -1], s_plan[:, 9])
-    # ax_yaw.set_ylabel('yaw (rad)')
-    #
-    # ax_w.plot(s_traj[:, -1], s_traj[:, 10])
-    # ax_w.plot(s_traj[:, -1], s_traj[:, 11])
-    # ax_w.plot(s_traj[:, -1], s_traj[:, 12])
-    # ax_w.plot(s_traj[:, -1], 0*s_traj[:, -1])
-    # ax_w.set_ylabel(r'$\omega$ (rad/s)')
-    #
-    # ax_px.set_title('Position/Yaw')
-    # ax_vx.set_title('Velocity')
-    # ax_yaw.set_xlabel('Time (s)')
-    # ax_w.set_xlabel('Time (s)')
+    ax_th.plot(tspan, trajs[:, :, 2])
+    ax_th.set_ylabel('$\omega$ (rad)')
+
+    ax_vx.plot(tspan, trajs[:, :, 12])
+    ax_vx.set_ylabel(r'$\frac{dx}{dt}$ (m/sec)')
+
+    ax_vy.plot(tspan, trajs[:, :, 13])
+    ax_vy.set_ylabel(r'$\frac{dy}{dt}$ (m/sec)')
+
+    ax_thdot.plot(tspan, trajs[:, :, 17])
+    ax_thdot.set_ylabel(r'$\frac{d\omega}{dt}$ (rad/sec)')
+
+    ax_px.set_title('Position')
+    ax_vx.set_title('Velocity')
+    ax_thdot.set_xlabel('Time (s)')
+    ax_th.set_xlabel('Time (s)')
 
     plt.subplots_adjust(left=0.1, right=0.98, top=0.93, wspace=0.3)
     #plt.savefig('./png/tracking_results.pdf', bbox_inches='tight', pad_inches=0.1)
