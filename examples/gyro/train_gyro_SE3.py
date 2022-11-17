@@ -15,9 +15,10 @@ from data_gyro import get_dataset, arrange_data
 from se3hamneuralode import to_pickle, pose_L2_geodesic_loss, traj_pose_L2_geodesic_loss
 import time
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))+'/data'
+THIS_DIR = os.path.dirname(os.path.abspath(__file__)) + '/data'
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(PARENT_DIR)
+
 
 def get_args():
     parser = argparse.ArgumentParser(description=None)
@@ -43,7 +44,6 @@ def get_model_parm_nums(model):
 
 
 def train(args):
-
     device = torch.device('cuda:' + str(args.gpu) if torch.cuda.is_available() else 'cpu')
 
     # Set random seed
@@ -55,14 +55,14 @@ def train(args):
     # Initialize the model
     if args.verbose:
         print("Start training with num of points = {} and solver {}.".format(args.num_points, args.solver))
-    model = SE3HamNODE(device=device, pretrain=True, udim=1).to(device)
+    model = SE3HamNODE(device=device, pretrain=True, udim=2).to(device)
     # Load saved params if needed
-    #path = '{}/quadrotor-se3ham-rk4-5p2-2000.tar'.format(args.save_dir)
-    #model.load_state_dict(torch.load(path, map_location=device))
+    # path = '{}/quadrotor-se3ham-rk4-5p2-2000.tar'.format(args.save_dir)
+    # model.load_state_dict(torch.load(path, map_location=device))
     # Save/load pre-init model
-    #path = '{}/quadrotor-se3ham-rk4-5p-pre-init.tar'.format(args.save_dir)
-    #model.load_state_dict(torch.load(path, map_location=device))
-    #torch.save(model.state_dict(), path)
+    # path = '{}/quadrotor-se3ham-rk4-5p-pre-init.tar'.format(args.save_dir)
+    # model.load_state_dict(torch.load(path, map_location=device))
+    # torch.save(model.state_dict(), path)
     num_parm = get_model_parm_nums(model)
     print('Model contains {} parameters'.format(num_parm))
     optim = torch.optim.Adam(model.parameters(), args.learn_rate, weight_decay=0.0)
@@ -75,18 +75,18 @@ def train(args):
     test_x_cat = np.concatenate(test_x, axis=1)
     train_x_cat = torch.tensor(train_x_cat, requires_grad=True, dtype=torch.float32).to(device)
     test_x_cat = torch.tensor(test_x_cat, requires_grad=True, dtype=torch.float32).to(device)
-    #train_x = torch.tensor(train_x, requires_grad=True, dtype=torch.float32).to(device)
-    #test_x = torch.tensor(test_x, requires_grad=True, dtype=torch.float32).to(device)
+    # train_x = torch.tensor(train_x, requires_grad=True, dtype=torch.float32).to(device)
+    # test_x = torch.tensor(test_x, requires_grad=True, dtype=torch.float32).to(device)
     t_eval = torch.tensor(t_eval, requires_grad=True, dtype=torch.float32).to(device)
 
-
     # Training stats
-    stats = {'train_loss': [], 'test_loss': [], 'forward_time': [], 'backward_time': [], 'nfe': [], 'train_x_loss': [],\
-             'test_x_loss':[], 'train_v_loss': [], 'test_v_loss': [], 'train_w_loss': [], 'test_w_loss': [], 'train_geo_loss':[], 'test_geo_loss':[]}
+    stats = {'train_loss': [], 'test_loss': [], 'forward_time': [], 'backward_time': [], 'nfe': [], 'train_x_loss': [], \
+             'test_x_loss': [], 'train_v_loss': [], 'test_v_loss': [], 'train_w_loss': [], 'test_w_loss': [],
+             'train_geo_loss': [], 'test_geo_loss': []}
 
     # Start training
-    for step in range(0,args.total_steps + 1):
-        #print(step)
+    for step in range(0, args.total_steps + 1):
+        # print(step)
         train_loss = 0
         test_loss = 0
         train_x_loss = 0
@@ -184,7 +184,8 @@ def train(args):
     for i in range(train_x.shape[0]):
         train_x_hat = odeint(model, train_x[i, 0, :, :], t_eval, method=args.solver)
         total_loss, l2_loss, geo_loss = \
-            traj_pose_L2_geodesic_loss(train_x[i, :, :, :], train_x_hat, split=[model.xdim, model.Rdim, model.twistdim, model.udim])
+            traj_pose_L2_geodesic_loss(train_x[i, :, :, :], train_x_hat,
+                                       split=[model.xdim, model.Rdim, model.twistdim, model.udim])
         train_loss.append(total_loss)
         train_l2_loss.append(l2_loss)
         train_geo_loss.append(geo_loss)
@@ -193,7 +194,8 @@ def train(args):
         # Run test data
         test_x_hat = odeint(model, test_x[i, 0, :, :], t_eval, method=args.solver)
         total_loss, l2_loss, geo_loss = \
-            traj_pose_L2_geodesic_loss(test_x[i,:,:,:], test_x_hat, split=[model.xdim, model.Rdim, model.twistdim, model.udim])
+            traj_pose_L2_geodesic_loss(test_x[i, :, :, :], test_x_hat,
+                                       split=[model.xdim, model.Rdim, model.twistdim, model.udim])
         test_loss.append(total_loss)
         test_l2_loss.append(l2_loss)
         test_geo_loss.append(geo_loss)
@@ -218,14 +220,14 @@ def train(args):
     test_geo_loss_per_traj = torch.sum(test_geo_loss, dim=0)
 
     print('Final trajectory train loss {:.4e} +/- {:.4e}\nFinal trajectory test loss {:.4e} +/- {:.4e}'
-    .format(train_loss_per_traj.mean().item(), train_loss_per_traj.std().item(),
-            test_loss_per_traj.mean().item(), test_loss_per_traj.std().item()))
+          .format(train_loss_per_traj.mean().item(), train_loss_per_traj.std().item(),
+                  test_loss_per_traj.mean().item(), test_loss_per_traj.std().item()))
     print('Final trajectory train l2 loss {:.4e} +/- {:.4e}\nFinal trajectory test l2 loss {:.4e} +/- {:.4e}'
-    .format(train_l2_loss_per_traj.mean().item(), train_l2_loss_per_traj.std().item(),
-            test_l2_loss_per_traj.mean().item(), test_l2_loss_per_traj.std().item()))
+          .format(train_l2_loss_per_traj.mean().item(), train_l2_loss_per_traj.std().item(),
+                  test_l2_loss_per_traj.mean().item(), test_l2_loss_per_traj.std().item()))
     print('Final trajectory train geo loss {:.4e} +/- {:.4e}\nFinal trajectory test loss {:.4e} +/- {:.4e}'
-    .format(train_geo_loss_per_traj.mean().item(), train_geo_loss_per_traj.std().item(),
-            test_geo_loss_per_traj.mean().item(), test_geo_loss_per_traj.std().item()))
+          .format(train_geo_loss_per_traj.mean().item(), train_geo_loss_per_traj.std().item(),
+                  test_geo_loss_per_traj.mean().item(), test_geo_loss_per_traj.std().item()))
 
     stats['traj_train_loss'] = train_loss_per_traj.detach().cpu().numpy()
     stats['traj_test_loss'] = test_loss_per_traj.detach().cpu().numpy()
