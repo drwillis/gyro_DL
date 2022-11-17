@@ -35,51 +35,54 @@ if __name__ == "__main__":
     fontsize_ticks = 32
     line_width = 4
 
-    # t_final = .01
-    # dt = 0.001
-    # timesteps = int(t_final/dt)
-    # times = np.arange(timesteps)*dt
-    # # taus = 0.5 * np.square(np.pi * times) - 0.25
-    # actions = np.array([[0.0, 0.5],
-    #                [-0.25,0.1],
-    #                [0.25,0.1]]);
-    # trajs, tspan, _ = sample_gym(seed=0, trials=1, timesteps=10000, actions=actions, ori_rep='rotmat', dt=dt)
-    # figsize = (10, 7.5)
-    # fig = plt.figure(figsize=figsize)
-    # ax_px = plt.subplot(421)
-    # ax_py = plt.subplot(423)
-    # ax_th = plt.subplot(425)
-    #
-    # ax_vx = plt.subplot(422)
-    # ax_vy = plt.subplot(424)
-    # ax_thdot = plt.subplot(426)
-    #
-    # ax_px.plot(tspan, trajs[:, :, 0])
-    # ax_px.set_ylabel('x (m)')
-    #
-    # ax_py.plot(tspan, trajs[:, :, 1])
-    # ax_py.set_ylabel('y (m)')
-    #
-    # ax_th.plot(tspan, trajs[:, :, 2])
-    # ax_th.set_ylabel('$\omega$ (rad)')
-    #
-    # ax_vx.plot(tspan, trajs[:, :, 12])
-    # ax_vx.set_ylabel(r'$\frac{dx}{dt}$ (m/sec)')
-    #
-    # ax_vy.plot(tspan, trajs[:, :, 13])
-    # ax_vy.set_ylabel(r'$\frac{dy}{dt}$ (m/sec)')
-    #
-    # ax_thdot.plot(tspan, trajs[:, :, 17])
-    # ax_thdot.set_ylabel(r'$\frac{d\omega}{dt}$ (rad/sec)')
-    #
-    # ax_px.set_title('Position')
-    # ax_vx.set_title('Velocity')
-    # ax_thdot.set_xlabel('Time (s)')
-    # ax_th.set_xlabel('Time (s)')
-    #
-    # plt.subplots_adjust(left=0.1, right=0.98, top=0.93, wspace=0.3)
-    # #plt.savefig('./png/tracking_results.pdf', bbox_inches='tight', pad_inches=0.1)
-    # plt.show()
+    t_final = 0.1
+    dt = 0.0001
+    timesteps = int(t_final/dt)
+    times = np.arange(timesteps)*dt
+    # taus = 0.5 * np.square(np.pi * times) - 0.25
+    actions = np.array([[0.0, 0.5],
+                   [-0.25,0.1],
+                   [0.25,0.1]]);
+    # actions = np.array([[0.25, 0.5]]);
+    for actionIdx in range(actions.shape[0]):
+        action=actions[actionIdx]
+        trajs, tspan, _ = sample_gym(seed=0, trials=1, timesteps=timesteps, actions=np.array([action]), ori_rep='rotmat', dt=dt)
+        figsize = (10, 7.5)
+        fig = plt.figure(figsize=figsize)
+        ax_px = plt.subplot(421)
+        ax_py = plt.subplot(423)
+        ax_th = plt.subplot(425)
+
+        ax_vx = plt.subplot(422)
+        ax_vy = plt.subplot(424)
+        ax_thdot = plt.subplot(426)
+
+        ax_px.plot(tspan, trajs[:, :, 0])
+        ax_px.set_ylabel('x (m)')
+
+        ax_py.plot(tspan, trajs[:, :, 1])
+        ax_py.set_ylabel('y (m)')
+
+        ax_th.plot(tspan, trajs[:, :, 2])
+        ax_th.set_ylabel('$\omega$ (rad)')
+
+        ax_vx.plot(tspan, trajs[:, :, 12])
+        ax_vx.set_ylabel(r'$\frac{dx}{dt}$ (m/sec)')
+
+        ax_vy.plot(tspan, trajs[:, :, 13])
+        ax_vy.set_ylabel(r'$\frac{dy}{dt}$ (m/sec)')
+
+        ax_thdot.plot(tspan, trajs[:, :, 17])
+        ax_thdot.set_ylabel(r'$\frac{d\omega}{dt}$ (rad/sec)')
+
+        ax_px.set_title('Position')
+        ax_vx.set_title('Velocity')
+        ax_thdot.set_xlabel('Time (s)')
+        ax_th.set_xlabel('Time (s)')
+
+        plt.subplots_adjust(left=0.1, right=0.98, top=0.93, wspace=0.3)
+        #plt.savefig('./png/tracking_results.pdf', bbox_inches='tight', pad_inches=0.1)
+        plt.show()
 
     # Plot loss
     # Load trained model
@@ -115,8 +118,8 @@ if __name__ == "__main__":
     det = []
     RRT_I_dist = []
     for i in range(len(sample_traj_hat)):
-        R_hat = sample_traj_hat[i,3:12]
-        R_hat = R_hat.reshape(3,3)
+        R_hat = sample_traj_hat[i, 3:12]
+        R_hat = R_hat.reshape(3, 3)
         R_det = np.linalg.det(R_hat)
         det.append(np.abs(R_det - 1))
         R_RT = np.matmul(R_hat, R_hat.transpose())
@@ -147,7 +150,7 @@ if __name__ == "__main__":
     # Plot V(q)
     fig = plt.figure(figsize=figsize)
     temp = pose[:, 2]
-    plt.plot(sample_traj[:,2], V_q.detach().cpu().numpy(), 'b--', label=r'$V(q)$', linewidth=3)
+    plt.plot(sample_traj[:, 2], V_q.detach().cpu().numpy(), 'b--', label=r'$V(q)$', linewidth=3)
     plt.xlabel("$z$", fontsize=fontsize_ticks)
     plt.xticks(fontsize=fontsize_ticks)
     plt.yticks(fontsize=fontsize_ticks)

@@ -105,7 +105,7 @@ def sample_gym():
             # Apply the control input for a few time steps
             for s in range(AGGR_PHY_STEPS):
                 obs, reward, done, info = env.step(action)
-                # The state constains: position (3), quaternion (4), rpy (3), linear vel (3), angular vel (3), motor speed rpm (4)
+                # The state contains: position (3), quaternion (4), rpy (3), linear vel (3), angular vel (3), motor speed rpm (4)
                 state = obs['0']["state"]
                 quat = state[3:7]
                 R = Rotation.from_quat(quat)

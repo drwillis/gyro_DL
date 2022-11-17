@@ -129,8 +129,8 @@ class GyroEnvV1(gym.Env):
 
         # u = np.clip(u, -self.max_torque, self.max_torque)[0]
         self.last_u = action[0]  # for rendering
-        costs = angle_normalize(theta) ** 2 + .1 * thetadot ** 2 + .1 * (x ** 2 + y ** 2) + \
-                0.01 * (xdot ** 2 + ydot ** 2)
+        costs = angle_normalize(theta) ** 2 + .1 * thetadot ** 2 + \
+                .1 * (x ** 2 + y ** 2) + 0.01 * (xdot ** 2 + ydot ** 2)
 
         ivp = solve_ivp(fun=lambda t, y: self.dynamics(t, y, action), t_span=[0, self.dt], y0=self.state)
         self.state = ivp.y[:, -1]
