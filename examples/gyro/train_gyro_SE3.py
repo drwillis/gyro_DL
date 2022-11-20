@@ -5,15 +5,18 @@
 # https://github.com/greydanus/hamiltonian-nn
 # https://github.com/Physics-aware-AI/Symplectic-ODENet
 
-import torch, argparse
-import numpy as np
-import os, sys
-from torchdiffeq import odeint_adjoint as odeint
-from se3hamneuralode import MLP, PSD
-from se3hamneuralode import SE3HamNODE
-from data_gyro import get_dataset, arrange_data
-from se3hamneuralode import to_pickle, pose_L2_geodesic_loss, traj_pose_L2_geodesic_loss
+import os
+import sys
 import time
+
+import argparse
+import numpy as np
+import torch
+from torchdiffeq import odeint_adjoint as odeint
+
+from data_gyro import get_dataset, arrange_data
+from se3hamneuralode import SE3HamNODE
+from se3hamneuralode import to_pickle, pose_L2_geodesic_loss, traj_pose_L2_geodesic_loss
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__)) + '/data'
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,8 +27,8 @@ def get_args():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--learn_rate', default=5e-4, type=float, help='learning rate')
     parser.add_argument('--nonlinearity', default='tanh', type=str, help='neural net nonlinearity')
-    parser.add_argument('--total_steps', default=500, type=int, help='number of gradient steps')
-    parser.add_argument('--print_every', default=100, type=int, help='number of gradient steps between prints')
+    parser.add_argument('--total_steps', default=100, type=int, help='number of gradient steps')
+    parser.add_argument('--print_every', default=10, type=int, help='number of gradient steps between prints')
     parser.add_argument('--name', default='gyro', type=str, help='only one option right now')
     parser.add_argument('--verbose', dest='verbose', action='store_true', help='verbose?')
     parser.add_argument('--seed', default=0, type=int, help='random seed')
@@ -52,10 +55,6 @@ def train(args):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    # Initialize the model
-    if args.verbose:
-        print("Start training with num of points = {} and solver {}.".format(args.num_points, args.solver))
-    model = SE3HamNODE(device=device, pretrain=True, udim=2).to(device)
     # Load saved params if needed
     # path = '{}/quadrotor-se3ham-rk4-5p2-2000.tar'.format(args.save_dir)
     # model.load_state_dict(torch.load(path, map_location=device))
@@ -63,12 +62,17 @@ def train(args):
     # path = '{}/quadrotor-se3ham-rk4-5p-pre-init.tar'.format(args.save_dir)
     # model.load_state_dict(torch.load(path, map_location=device))
     # torch.save(model.state_dict(), path)
-    num_parm = get_model_parm_nums(model)
-    print('Model contains {} parameters'.format(num_parm))
-    optim = torch.optim.Adam(model.parameters(), args.learn_rate, weight_decay=0.0)
-
+    actions = np.array([[0.0, 0.5],
+                        [-0.25, 0.1],
+                        [0.25, 0.1]]);
+    # trajs, tspan, _  = sample_gym(seed=0, trials=50, u=us[0], timesteps=20, ori_rep='6d')
+    # t_final = 2.5;
+    t_final = 0.1
+    dt = 0.0001
+    timesteps = int(t_final / dt)
     # Collect data
-    data = get_dataset(test_split=0.8, save_dir=args.save_dir)
+    data = get_dataset(trials=10, dt=0.0001, timesteps=timesteps, actions=actions, ori_rep='rotmat',
+                       trial_split=0.8, save_dir=args.save_dir)
     train_x, t_eval = arrange_data(data['x'], data['t'], num_points=args.num_points)
     test_x, t_eval = arrange_data(data['test_x'], data['t'], num_points=args.num_points)
     train_x_cat = np.concatenate(train_x, axis=1)
@@ -83,6 +87,14 @@ def train(args):
     stats = {'train_loss': [], 'test_loss': [], 'forward_time': [], 'backward_time': [], 'nfe': [], 'train_x_loss': [], \
              'test_x_loss': [], 'train_v_loss': [], 'test_v_loss': [], 'train_w_loss': [], 'test_w_loss': [],
              'train_geo_loss': [], 'test_geo_loss': []}
+
+    # Initialize the model
+    if args.verbose:
+        print("Start training with num of points = {} and solver {}.".format(args.num_points, args.solver))
+    model = SE3HamNODE(device=device, pretrain=True, udim=2).to(device)
+    num_parm = get_model_parm_nums(model)
+    print('Model contains {} parameters'.format(num_parm))
+    optim = torch.optim.Adam(model.parameters(), args.learn_rate, weight_decay=0.0)
 
     # Start training
     for step in range(0, args.total_steps + 1):

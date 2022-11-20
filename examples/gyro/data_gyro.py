@@ -46,7 +46,7 @@ def sample_gym(seed=0, timesteps=10, trials=1, min_angle=0.,
     return trajs, tspan, gym_settings
 
 
-def get_dataset(seed=0, trials=10, test_split=0.5, save_dir=None, actions=np.array([[0, 0]], dtype=float), dt=0.05,
+def get_dataset(seed=0, trials=10, trial_split=0.5, save_dir=None, actions=np.array([[0, 0]], dtype=float), dt=0.05,
                 rad=False, ori_rep='rotmat', friction=False, **kwargs):
     data = {}
 
@@ -65,7 +65,7 @@ def get_dataset(seed=0, trials=10, test_split=0.5, save_dir=None, actions=np.arr
             trajs_force.append(trajs)
         data['x'] = np.stack(trajs_force, axis=0)  # (3, 45, 50, 3)
         # make a train/test split
-        split_ix = int(trials * test_split)
+        split_ix = int(trials * trial_split)
         split_data = {}
         split_data['x'], split_data['test_x'] = data['x'][:, :, :split_ix, :], data['x'][:, :, split_ix:, :]
 

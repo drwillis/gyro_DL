@@ -259,9 +259,6 @@ def traj_pose_L2_geodesic_loss(traj,traj_hat, split):
             geo_loss = torch.cat((geo_loss, t_geo_loss), dim=0)
     return total_loss, l2_loss, geo_loss
 
-
-
-
 def to_pickle(thing, path): # save something
     with open(path, 'wb') as handle:
         pickle.dump(thing, handle, protocol=pickle.HIGHEST_PROTOCOL)

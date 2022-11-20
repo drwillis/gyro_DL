@@ -111,8 +111,8 @@ if __name__ == "__main__":
 
     # Pick a sample test trajectory
     traj = 2
-    sample_traj = test_x[traj,:,2,0:12]
-    sample_traj_hat = test_x_hat[traj,:,2,0:12]
+    sample_traj = test_x[traj, :, 2, 0:12]
+    sample_traj_hat = test_x_hat[traj, :, 2, 0:12]
 
     # Check SE(3) constraints along the trajectory
     det = []
