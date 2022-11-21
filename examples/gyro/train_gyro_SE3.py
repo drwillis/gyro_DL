@@ -27,7 +27,7 @@ def get_args():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--learn_rate', default=5e-4, type=float, help='learning rate')
     parser.add_argument('--nonlinearity', default='tanh', type=str, help='neural net nonlinearity')
-    parser.add_argument('--total_steps', default=100, type=int, help='number of gradient steps')
+    parser.add_argument('--total_steps', default=170, type=int, help='number of gradient steps')
     parser.add_argument('--print_every', default=10, type=int, help='number of gradient steps between prints')
     parser.add_argument('--name', default='gyro', type=str, help='only one option right now')
     parser.add_argument('--verbose', dest='verbose', action='store_true', help='verbose?')
@@ -48,7 +48,6 @@ def get_model_parm_nums(model):
 
 def train(args):
     device = torch.device('cuda:' + str(args.gpu) if torch.cuda.is_available() else 'cpu')
-
     # Set random seed
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -71,6 +70,7 @@ def train(args):
     dt = 0.0001
     timesteps = int(t_final / dt)
     # Collect data
+    # trials = 20 exceeds memory capacity of GPU
     data = get_dataset(trials=10, dt=0.0001, timesteps=timesteps, actions=actions, ori_rep='rotmat',
                        trial_split=0.8, save_dir=args.save_dir)
     train_x, t_eval = arrange_data(data['x'], data['t'], num_points=args.num_points)

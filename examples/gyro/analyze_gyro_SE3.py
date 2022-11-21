@@ -34,6 +34,7 @@ if __name__ == "__main__":
     fontsize = 24
     fontsize_ticks = 32
     line_width = 4
+    fig = plt.figure(figsize=figsize)
 
     t_final = 0.1
     dt = 0.0001
@@ -47,8 +48,8 @@ if __name__ == "__main__":
     for actionIdx in range(actions.shape[0]):
         action=actions[actionIdx]
         trajs, tspan, _ = sample_gym(seed=0, trials=1, timesteps=timesteps, actions=np.array([action]), ori_rep='rotmat', dt=dt)
-        figsize = (10, 7.5)
-        fig = plt.figure(figsize=figsize)
+        # figsize = (10, 7.5)
+        # fig = plt.figure(figsize=figsize)
         ax_px = plt.subplot(421)
         ax_py = plt.subplot(423)
         ax_th = plt.subplot(425)
@@ -95,7 +96,6 @@ if __name__ == "__main__":
     test_x = stats['test_x']
     t_eval = stats['t_eval']
     print("Loaded data!")
-    fig = plt.figure(figsize=figsize)
     train_loss = stats['train_loss']
     test_loss = stats['test_loss']
     iterations = len(train_loss)
@@ -110,9 +110,9 @@ if __name__ == "__main__":
     plt.show()
 
     # Pick a sample test trajectory
-    traj = 2
-    sample_traj = test_x[traj, :, 2, 0:12]
-    sample_traj_hat = test_x_hat[traj, :, 2, 0:12]
+    traj = 1
+    sample_traj = test_x[traj, :, 1, 0:12]
+    sample_traj_hat = test_x_hat[traj, :, 1, 0:12]
 
     # Check SE(3) constraints along the trajectory
     det = []
@@ -221,20 +221,20 @@ if __name__ == "__main__":
     fig = plt.figure(figsize=figsize)
     plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 3, 1], 'r--', linewidth=line_width,
              label=r'$g_{\omega}(q)[0,1]$')
-    plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 4, 2], 'g--', linewidth=line_width,
-             label=r'$g_{\omega}(q)[1,2]$')
-    plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 5, 3], 'b--', linewidth=line_width,
-             label=r'$g_{\omega}(q)[2,3]$')
+    # plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 4, 2], 'g--', linewidth=line_width,
+    #          label=r'$g_{\omega}(q)[1,2]$')
+    # plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 5, 3], 'b--', linewidth=line_width,
+    #          label=r'$g_{\omega}(q)[2,3]$')
     plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 3, 0], 'c--', linewidth=2,
              label=r'Other $g_{\omega}(q)$')
-    plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 3, 2], 'c--', linewidth=2)
-    plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 3, 3], 'c--', linewidth=2)
+    # plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 3, 2], 'c--', linewidth=2)
+    # plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 3, 3], 'c--', linewidth=2)
     plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 4, 0], 'c--', linewidth=2)
     plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 4, 1], 'c--', linewidth=2)
-    plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 4, 3], 'c--', linewidth=2)
+    # plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 4, 3], 'c--', linewidth=2)
     plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 5, 0], 'c--', linewidth=2)
     plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 5, 1], 'c--', linewidth=2)
-    plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 5, 2], 'c--', linewidth=2)
+    # plt.plot(t_eval, g_q.detach().cpu().numpy()[:, 5, 2], 'c--', linewidth=2)
     plt.xlabel("$t(s)$", fontsize=fontsize_ticks)
     plt.xticks(fontsize=fontsize_ticks)
     plt.yticks(fontsize=fontsize_ticks)
