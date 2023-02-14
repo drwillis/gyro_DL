@@ -154,7 +154,7 @@ def traj_rotmat_L2_geodesic_loss(traj,traj_hat, split):
 ################################ Loss calculation for SE(3) ################################
 
 
-def pose_L2_geodesic_loss(u,u_hat, split):
+def pose_L2_geodesic_loss(u, u_hat, split):
     #################
     x_hat, R_hat, q_dot_hat, u_hat = torch.split(u_hat, split, dim=2)
     x, R, q_dot, u = torch.split(u, split, dim=2)

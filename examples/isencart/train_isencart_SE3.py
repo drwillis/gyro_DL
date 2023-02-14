@@ -62,10 +62,12 @@ def train(args):
     # Collect data
     # data = get_dataset(test_split=0.8, save_dir=args.save_dir)
 
-    data_file_list = ['data/data_1.txt']
+    data_file_list = ['data/fixed_data_1.txt']
     # data_file_list = ['data/data_1.txt', 'data/data_2.txt', 'data/data_3.txt', 'data/data_4.txt']
     reference_coordinate_sys_points = None
 
+    training_data = {}
+    ALIGNMENT_ERROR_TOLERANCE = 5.0 #
 
     for data_file in data_file_list:
         data_set = pd.read_csv(data_file).to_numpy()
@@ -85,8 +87,9 @@ def train(args):
         if reference_coordinate_sys_points is None:
             reference_coordinate_sys_points = get_marker_coords(data_set[0, :])
 
-        training_data = np.zeros((data_set.shape[0], 20), dtype=np.float64)
-
+        training_data['data'] = np.zeros((data_set.shape[0], 20), dtype=np.float64)
+        training_data['time'] = np.zeros((data_set.shape[0], 1), dtype=np.float64)
+        training_data['input_valid'] = np.zeros((data_set.shape[0], 1), dtype=bool)
         # CONVERT DATA TO x,R,dx,dR,Vbatt,dutyL,dutyR
         # p_x = np.mean(data_set[:, 0:10:3], axis=1)
         # p_y = np.mean(data_set[:, 1:11:3], axis=1)
@@ -99,11 +102,15 @@ def train(args):
         from ralign import ralign, similarity_transform
         T_prev = np.eye(4)
         measured_coordinate_sys_points_cur = get_marker_coords(data_set[0, :])
-        position_prev = measured_coordinate_sys_points_cur.mean(axis=0)
+        coord_sys_origin = measured_coordinate_sys_points_cur.mean(axis=0)
+        position_prev = coord_sys_origin
         for row in range(data_set.shape[0]):
             measured_coordinate_sys_points_cur = get_marker_coords(data_set[row, :])
             # R, c, t = ralign(reference_coordinate_sys_points.T, measured_coordinate_sys_points_cur.T)
             R, c, t = similarity_transform(reference_coordinate_sys_points, measured_coordinate_sys_points_cur)
+            # print("t = " + str(t-coord_sys_origin))
+            if abs(c-1.0) > 1.0e-1:
+                print("Error! Invalid scale! c = " + str(c))
             T_cur = np.concatenate((np.concatenate([R, t.reshape(3, 1)], axis=1), [[0, 0, 0, 1.0]]), axis=0);
             # if (row==0):
             #     dR, dc, dt = np.eye(3), 1.0, np.zeros(3)
@@ -113,32 +120,45 @@ def train(args):
             T_delta12 = T_cur @ np.linalg.inv(T_prev)
             dR = T_delta12[:3, :3]
             transformed_points = np.concatenate([measured_coordinate_sys_points_cur, [[1], [1], [1], [1]]], axis=1) @ T_delta12.T
+            transformed_points2 = np.concatenate([reference_coordinate_sys_points, [[1], [1], [1], [1]]], axis=1) @ T_cur.T
+            pt_errors = measured_coordinate_sys_points_cur - transformed_points2[:, :3]
+            # if row == 62 or row == 63:
+            #     aaa = 1
+            if (1/4)*np.sum(np.sqrt(np.sum(pt_errors**2, axis=1))) > ALIGNMENT_ERROR_TOLERANCE:
+                print("Bad data detected at row " + str(row))
+                print("average pt error = " + str((1/4)*np.sum(np.sqrt(np.sum(pt_errors**2, axis=1)))))
             # print("Rotation matrix=\n", R, "\nScaling coefficient=", c, "\nTranslation vector=", t)
             # print("derivative Rotation matrix=\n", dR, "\nScaling coefficient=", dc, "\nTranslation vector=", dt)
             position = measured_coordinate_sys_points_cur.mean(axis=0)
             velocity = position - position_prev
-            velocity2 =  T_delta12[:3, 3].T
+            velocity2 = T_delta12[:3, 3].T
+            training_data['time'] = t_eval[row]
             if data_set[row, 14] != 0 or data_set[row, 15] != 0:
-                training_data[row, 0:3] = position
-                training_data[row, 3:12] = R.flatten()
-                training_data[row, 12:15] = velocity
-                theta = np.arccos((np.trace(R) - 1)/2.0)
-                sin_theta = np.sin(theta)
-                theta_over_sin_theta = theta/sin_theta
-                omega_SE3 = np.array((dR[2, 1] - dR[1, 2], dR[0, 2] - dR[2, 0], dR[1, 0] - dR[0, 1]))/2.0
-                if abs(velocity[0] - T_delta12[0, 3]) > 1.0e-5:
-                    print("Error! " + str(velocity[0] - T_delta12[0, 3]))
-                training_data[row, 15:18] = omega_SE3
-                #  V_batt
-                # training_data[row, 19] = data_set[row, 22]
-                #  dutyR, dutyL
-                training_data[row, 18:20] = data_set[row, 14:16]
-
+                training_data['input_valid'] = True
+            else:
+                training_data['input_valid'] = False
+            training_data['data'][row, 0:3] = position
+            training_data['data'][row, 3:12] = R.flatten()
+            training_data['data'][row, 12:15] = velocity
+            theta = np.arccos((np.trace(R) - 1)/2.0)
+            sin_theta = np.sin(theta)
+            theta_over_sin_theta = theta/sin_theta
+            omega_SE3 = np.array((dR[2, 1] - dR[1, 2], dR[0, 2] - dR[2, 0], dR[1, 0] - dR[0, 1]))/2.0
+            # if abs(velocity[0] - T_delta12[0, 3]) > 1.0e-5:
+            #     print("Error! " + str(velocity[0] - T_delta12[0, 3]))
+            training_data['data'][row, 15:18] = omega_SE3
+            #  V_batt
+            # training_data[row, 19] = data_set[row, 22]
+            #  dutyR, dutyL
+            training_data['data'][row, 18:20] = data_set[row, 14:16]
             position_prev = position
             T_prev = T_cur
 
+    non_zero_input_indices = np.nonzero(training_data['input_valid'])
+
+    delta_t = np.diff(t_eval)
     test_split = 0.8
-    samples = training_data.shape[0]
+    samples = training_data['data'].shape[0]
     split_ix = int(samples * test_split)
     split_data = {}
 
@@ -159,7 +179,7 @@ def train(args):
     print('Model contains {} parameters'.format(num_parm))
     optim = torch.optim.Adam(model.parameters(), args.learn_rate, weight_decay=0.0)
 
-    split_data['x'], split_data['test_x'] = training_data[:split_ix, :], training_data[split_ix:, :]
+    split_data['x'], split_data['test_x'] = training_data['data'][:split_ix, :], training_data['data'][split_ix:, :]
     split_data['t_train'], split_data['t_test'] = t_eval[:split_ix], t_eval[split_ix:]
     data = split_data
     # data['t'] = tspan
