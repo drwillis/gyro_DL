@@ -49,6 +49,14 @@ def get_marker_coords(dataset_row):
                      dataset_row[6:9:1],
                      dataset_row[9:12:1]])
 
+def split(array, nrows, ncols):
+    """Split a matrix into sub-matrices."""
+
+    r, h = array.shape
+    return (array.reshape(h//nrows, nrows, -1, ncols)
+                 .swapaxes(1, 2)
+                 .reshape(-1, nrows, ncols))
+
 def train(args):
 
     # Load saved params if needed
@@ -62,7 +70,7 @@ def train(args):
     # Collect data
     # data = get_dataset(test_split=0.8, save_dir=args.save_dir)
 
-    data_file_list = ['data/fixed_data_1.txt']
+    data_file_list = ['data/data_1.txt']
     # data_file_list = ['data/data_1.txt', 'data/data_2.txt', 'data/data_3.txt', 'data/data_4.txt']
     reference_coordinate_sys_points = None
 
@@ -154,12 +162,24 @@ def train(args):
             position_prev = position
             T_prev = T_cur
 
-    non_zero_input_indices = np.nonzero(training_data['input_valid'])
 
-    delta_t = np.diff(t_eval)
+    non_zero_input_indices = np.nonzero(training_data['input_valid'])
+    EXPERIMENT_NUMSAMPLES = 30
+    num_samples = training_data['data'].shape[0]
+    trim = num_samples % EXPERIMENT_NUMSAMPLES
+    num_experiments = (num_samples-trim)/EXPERIMENT_NUMSAMPLES
+    num_experiments = int(num_experiments)
+    training_data['data'] = training_data['data'][trim:]
+    experiments = np.zeros((num_experiments, EXPERIMENT_NUMSAMPLES, 20))
+    for experimentIdx in range(0, num_experiments):
+        experiments[experimentIdx, :, :] = training_data['data'][experimentIdx*EXPERIMENT_NUMSAMPLES:((experimentIdx+1)*EXPERIMENT_NUMSAMPLES),:]
+    delta_t = np.mean(np.diff(t_eval))
+    experiment_times = np.linspace(0,(EXPERIMENT_NUMSAMPLES-1)*delta_t, EXPERIMENT_NUMSAMPLES)
+
     test_split = 0.8
     samples = training_data['data'].shape[0]
     split_ix = int(samples * test_split)
+    # split_ix = int(EXPERIMENT_NUMSAMPLES * test_split)
     split_data = {}
 
     device = torch.device('cuda:' + str(args.gpu) if torch.cuda.is_available() else 'cpu')
@@ -181,6 +201,8 @@ def train(args):
 
     split_data['x'], split_data['test_x'] = training_data['data'][:split_ix, :], training_data['data'][split_ix:, :]
     split_data['t_train'], split_data['t_test'] = t_eval[:split_ix], t_eval[split_ix:]
+    # split_data['x'], split_data['test_x'] = experiments[:, :split_ix, :], experiments[:, split_ix:, :]
+    # split_data['t_train'], split_data['t_test'] = experiment_times[:split_ix], experiment_times[split_ix:]
     data = split_data
     # data['t'] = tspan
     # df.head()  # To get first n rows from the dataset default value of n is 5
@@ -192,13 +214,14 @@ def train(args):
     test_x_cat = torch.tensor(test_x_cat, requires_grad=True, dtype=torch.float32).to(device)
     #train_x = torch.tensor(train_x, requires_grad=True, dtype=torch.float32).to(device)
     #test_x = torch.tensor(test_x, requires_grad=True, dtype=torch.float32).to(device)
-    t_eval = torch.tensor(split_data['t_train'], requires_grad=True, dtype=torch.float32).to(device)
+    t_eval_host = np.linspace(0, (EXPERIMENT_NUMSAMPLES - 1) * delta_t, 5)
+    # t_eval = torch.tensor(split_data['t_train'], requires_grad=True, dtype=torch.float32).to(device)
+    t_eval = torch.tensor(t_eval_host, requires_grad=True, dtype=torch.float32).to(device)
 
 
     # Training stats
     stats = {'train_loss': [], 'test_loss': [], 'forward_time': [], 'backward_time': [], 'nfe': [], 'train_x_loss': [],\
              'test_x_loss':[], 'train_v_loss': [], 'test_v_loss': [], 'train_w_loss': [], 'test_w_loss': [], 'train_geo_loss':[], 'test_geo_loss':[]}
-
     # Start training
     for step in range(0,args.total_steps + 1):
         #print(step)
@@ -215,11 +238,12 @@ def train(args):
 
         t = time.time()
         # Predict states
-        train_x_hat = odeint(model, train_x_cat, t_eval, method=args.solver)
+        #  returns predictions for times in t_eval for each of the provided state values in train_x_cat as initial conditions
+        train_x_hat = odeint(model, train_x_cat[:, :], t_eval, method=args.solver)
         forward_time = time.time() - t
-        # target = train_x_cat[1:, :, :]
+        target = train_x_cat[1:, :, :]
         target_hat = train_x_hat[1:, :, :]
-        target = train_x_cat
+        # target = train_x_cat
         # target_hat = train_x_hat
 
         # Calculate loss
