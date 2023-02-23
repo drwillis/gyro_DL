@@ -26,7 +26,7 @@ def get_args():
     parser.add_argument('--nonlinearity', default='tanh', type=str, help='neural net nonlinearity')
     parser.add_argument('--total_steps', default=500, type=int, help='number of gradient steps')
     parser.add_argument('--print_every', default=100, type=int, help='number of gradient steps between prints')
-    parser.add_argument('--name', default='quadrotor', type=str, help='only one option right now')
+    parser.add_argument('--name', default='isencart', type=str, help='only one option right now')
     parser.add_argument('--verbose', dest='verbose', action='store_true', help='verbose?')
     parser.add_argument('--seed', default=0, type=int, help='random seed')
     parser.add_argument('--save_dir', default=THIS_DIR, type=str, help='where to save the trained model')
@@ -70,7 +70,8 @@ def train(args):
     # Collect data
     # data = get_dataset(test_split=0.8, save_dir=args.save_dir)
 
-    data_file_list = ['data/data_1.txt']
+    # data_file_list = ['data/data_1.txt']
+    data_file_list = ['data/data_2.txt']
     # data_file_list = ['data/data_1.txt', 'data/data_2.txt', 'data/data_3.txt', 'data/data_4.txt']
     reference_coordinate_sys_points = None
 
@@ -98,6 +99,7 @@ def train(args):
         training_data['data'] = np.zeros((data_set.shape[0], 20), dtype=np.float64)
         training_data['time'] = np.zeros((data_set.shape[0], 1), dtype=np.float64)
         training_data['input_valid'] = np.zeros((data_set.shape[0], 1), dtype=bool)
+        training_data['data_valid'] = np.ones((data_set.shape[0], 1), dtype=bool)
         # CONVERT DATA TO x,R,dx,dR,Vbatt,dutyL,dutyR
         # p_x = np.mean(data_set[:, 0:10:3], axis=1)
         # p_y = np.mean(data_set[:, 1:11:3], axis=1)
@@ -135,6 +137,9 @@ def train(args):
             if (1/4)*np.sum(np.sqrt(np.sum(pt_errors**2, axis=1))) > ALIGNMENT_ERROR_TOLERANCE:
                 print("Bad data detected at row " + str(row))
                 print("average pt error = " + str((1/4)*np.sum(np.sqrt(np.sum(pt_errors**2, axis=1)))))
+                training_data['data_valid'][row] = False
+            else:
+                training_data['data_valid'][row] = True
             # print("Rotation matrix=\n", R, "\nScaling coefficient=", c, "\nTranslation vector=", t)
             # print("derivative Rotation matrix=\n", dR, "\nScaling coefficient=", dc, "\nTranslation vector=", dt)
             position = measured_coordinate_sys_points_cur.mean(axis=0)
@@ -142,9 +147,9 @@ def train(args):
             velocity2 = T_delta12[:3, 3].T
             training_data['time'] = t_eval[row]
             if data_set[row, 14] != 0 or data_set[row, 15] != 0:
-                training_data['input_valid'] = True
+                training_data['input_valid'][row] = True
             else:
-                training_data['input_valid'] = False
+                training_data['input_valid'][row] = False
             training_data['data'][row, 0:3] = position
             training_data['data'][row, 3:12] = R.flatten()
             training_data['data'][row, 12:15] = velocity
@@ -164,20 +169,29 @@ def train(args):
 
 
     non_zero_input_indices = np.nonzero(training_data['input_valid'])
-    EXPERIMENT_NUMSAMPLES = 30
+    EXPERIMENT_NUMSAMPLES = 5
     num_samples = training_data['data'].shape[0]
     trim = num_samples % EXPERIMENT_NUMSAMPLES
     num_experiments = (num_samples-trim)/EXPERIMENT_NUMSAMPLES
     num_experiments = int(num_experiments)
     training_data['data'] = training_data['data'][trim:]
-    experiments = np.zeros((num_experiments, EXPERIMENT_NUMSAMPLES, 20))
+    experiments = np.zeros((EXPERIMENT_NUMSAMPLES, num_experiments, 20))
+    deleteIndices = []
     for experimentIdx in range(0, num_experiments):
-        experiments[experimentIdx, :, :] = training_data['data'][experimentIdx*EXPERIMENT_NUMSAMPLES:((experimentIdx+1)*EXPERIMENT_NUMSAMPLES),:]
+        if np.all(training_data['data_valid'][experimentIdx*EXPERIMENT_NUMSAMPLES:((experimentIdx+1)*EXPERIMENT_NUMSAMPLES)]):
+            experiments[:, experimentIdx, :] = training_data['data'][experimentIdx*EXPERIMENT_NUMSAMPLES:((experimentIdx+1)*EXPERIMENT_NUMSAMPLES),:]
+        else:
+            deleteIndices.append(experimentIdx)
+
+    for idx in range(0, len(deleteIndices)):
+        print("Deleting experiment " + str(deleteIndices[idx]))
+        np.delete(experiments, deleteIndices[idx], axis=1)
+
     delta_t = np.mean(np.diff(t_eval))
     experiment_times = np.linspace(0,(EXPERIMENT_NUMSAMPLES-1)*delta_t, EXPERIMENT_NUMSAMPLES)
 
     test_split = 0.8
-    samples = training_data['data'].shape[0]
+    samples = training_data['data'].shape[1]
     split_ix = int(samples * test_split)
     # split_ix = int(EXPERIMENT_NUMSAMPLES * test_split)
     split_data = {}
@@ -199,10 +213,10 @@ def train(args):
     print('Model contains {} parameters'.format(num_parm))
     optim = torch.optim.Adam(model.parameters(), args.learn_rate, weight_decay=0.0)
 
-    split_data['x'], split_data['test_x'] = training_data['data'][:split_ix, :], training_data['data'][split_ix:, :]
-    split_data['t_train'], split_data['t_test'] = t_eval[:split_ix], t_eval[split_ix:]
-    # split_data['x'], split_data['test_x'] = experiments[:, :split_ix, :], experiments[:, split_ix:, :]
-    # split_data['t_train'], split_data['t_test'] = experiment_times[:split_ix], experiment_times[split_ix:]
+    # split_data['x'], split_data['test_x'] = training_data['data'][:split_ix, :], training_data['data'][split_ix:, :]
+    # split_data['t_train'], split_data['t_test'] = t_eval[:split_ix], t_eval[split_ix:]
+    split_data['x'], split_data['test_x'] = experiments[:, :split_ix, :], experiments[:, split_ix:, :]
+    split_data['t_train'], split_data['t_test'] = experiment_times[:split_ix], experiment_times[split_ix:]
     data = split_data
     # data['t'] = tspan
     # df.head()  # To get first n rows from the dataset default value of n is 5
@@ -210,6 +224,7 @@ def train(args):
 
     train_x_cat = data['x']
     test_x_cat = data['test_x']
+
     train_x_cat = torch.tensor(train_x_cat, requires_grad=True, dtype=torch.float32).to(device)
     test_x_cat = torch.tensor(test_x_cat, requires_grad=True, dtype=torch.float32).to(device)
     #train_x = torch.tensor(train_x, requires_grad=True, dtype=torch.float32).to(device)
@@ -217,6 +232,7 @@ def train(args):
     t_eval_host = np.linspace(0, (EXPERIMENT_NUMSAMPLES - 1) * delta_t, 5)
     # t_eval = torch.tensor(split_data['t_train'], requires_grad=True, dtype=torch.float32).to(device)
     t_eval = torch.tensor(t_eval_host, requires_grad=True, dtype=torch.float32).to(device)
+    data['t'] = t_eval_host
 
 
     # Training stats
@@ -239,7 +255,7 @@ def train(args):
         t = time.time()
         # Predict states
         #  returns predictions for times in t_eval for each of the provided state values in train_x_cat as initial conditions
-        train_x_hat = odeint(model, train_x_cat[:, :], t_eval, method=args.solver)
+        train_x_hat = odeint(model, train_x_cat[0, :, :], t_eval, method=args.solver)
         forward_time = time.time() - t
         target = train_x_cat[1:, :, :]
         target_hat = train_x_hat[1:, :, :]
@@ -309,6 +325,9 @@ def train(args):
     # Calculate loss mean and standard deviation
     train_x, t_eval = data['x'], data['t']
     test_x, t_eval = data['test_x'], data['t']
+
+    train_x = np.expand_dims(train_x, axis=0)
+    test_x = np.expand_dims(test_x, axis=0)
 
     train_x = torch.tensor(train_x, requires_grad=True, dtype=torch.float32).to(device)
     test_x = torch.tensor(test_x, requires_grad=True, dtype=torch.float32).to(device)
