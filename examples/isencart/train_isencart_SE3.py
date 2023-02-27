@@ -15,6 +15,7 @@ from se3hamneuralode import SE3HamNODE
 from data_collection import get_dataset, arrange_data
 from se3hamneuralode import to_pickle, pose_L2_geodesic_loss, traj_pose_L2_geodesic_loss
 import time
+import matplotlib.pyplot as plt
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))+'/data'
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,10 +23,10 @@ sys.path.append(PARENT_DIR)
 
 def get_args():
     parser = argparse.ArgumentParser(description=None)
-    parser.add_argument('--learn_rate', default=5e-4, type=float, help='learning rate')
+    parser.add_argument('--learn_rate', default=5e-6, type=float, help='learning rate')
     parser.add_argument('--nonlinearity', default='tanh', type=str, help='neural net nonlinearity')
     parser.add_argument('--total_steps', default=500, type=int, help='number of gradient steps')
-    parser.add_argument('--print_every', default=100, type=int, help='number of gradient steps between prints')
+    parser.add_argument('--print_every', default=10, type=int, help='number of gradient steps between prints')
     parser.add_argument('--name', default='isencart', type=str, help='only one option right now')
     parser.add_argument('--verbose', dest='verbose', action='store_true', help='verbose?')
     parser.add_argument('--seed', default=0, type=int, help='random seed')
@@ -44,18 +45,14 @@ def get_model_parm_nums(model):
 
 
 def get_marker_coords(dataset_row):
-    return np.array([dataset_row[0:3:1],
-                     dataset_row[3:6:1],
-                     dataset_row[6:9:1],
-                     dataset_row[9:12:1]])
-
-def split(array, nrows, ncols):
-    """Split a matrix into sub-matrices."""
-
-    r, h = array.shape
-    return (array.reshape(h//nrows, nrows, -1, ncols)
-                 .swapaxes(1, 2)
-                 .reshape(-1, nrows, ncols))
+    return np.array([[dataset_row[0],dataset_row[2],dataset_row[1]],
+                     [dataset_row[3],dataset_row[5],dataset_row[4]],
+                     [dataset_row[6],dataset_row[8],dataset_row[7]],
+                     [dataset_row[9],dataset_row[11],dataset_row[10]]])/1000
+    # return np.array([dataset_row[0:3:1],
+    #                  dataset_row[3:6:1],
+    #                  dataset_row[6:9:1],
+    #                  dataset_row[9:12:1]])
 
 def train(args):
 
@@ -71,12 +68,13 @@ def train(args):
     # data = get_dataset(test_split=0.8, save_dir=args.save_dir)
 
     # data_file_list = ['data/data_1.txt']
-    data_file_list = ['data/data_2.txt']
+    # data_file_list = ['data/data_2.txt']
+    data_file_list = ['data/data_3.txt']
     # data_file_list = ['data/data_1.txt', 'data/data_2.txt', 'data/data_3.txt', 'data/data_4.txt']
     reference_coordinate_sys_points = None
 
     training_data = {}
-    ALIGNMENT_ERROR_TOLERANCE = 5.0 #
+    ALIGNMENT_ERROR_TOLERANCE = 0.008 #
 
     for data_file in data_file_list:
         data_set = pd.read_csv(data_file).to_numpy()
@@ -121,7 +119,8 @@ def train(args):
             # print("t = " + str(t-coord_sys_origin))
             if abs(c-1.0) > 1.0e-1:
                 print("Error! Invalid scale! c = " + str(c))
-            T_cur = np.concatenate((np.concatenate([R, t.reshape(3, 1)], axis=1), [[0, 0, 0, 1.0]]), axis=0);
+                training_data['data_valid'][row] = False
+            T_cur = np.concatenate((np.concatenate([R, t.reshape(3, 1)], axis=1), [[0, 0, 0, 1.0]]), axis=0)
             # if (row==0):
             #     dR, dc, dt = np.eye(3), 1.0, np.zeros(3)
             # else:
@@ -143,30 +142,92 @@ def train(args):
             # print("Rotation matrix=\n", R, "\nScaling coefficient=", c, "\nTranslation vector=", t)
             # print("derivative Rotation matrix=\n", dR, "\nScaling coefficient=", dc, "\nTranslation vector=", dt)
             position = measured_coordinate_sys_points_cur.mean(axis=0)
+            # print("position="+str(position))
             velocity = position - position_prev
             velocity2 = T_delta12[:3, 3].T
             training_data['time'] = t_eval[row]
-            if data_set[row, 14] != 0 or data_set[row, 15] != 0:
+            # if data_set[row, 14] != 0 or data_set[row, 15] != 0:
+            if data_set[row, 14] > 0.5 or data_set[row, 15] > 0.5:
                 training_data['input_valid'][row] = True
             else:
                 training_data['input_valid'][row] = False
+                # training_data['data_valid'][row] = False
             training_data['data'][row, 0:3] = position
             training_data['data'][row, 3:12] = R.flatten()
-            training_data['data'][row, 12:15] = velocity
             theta = np.arccos((np.trace(R) - 1)/2.0)
             sin_theta = np.sin(theta)
-            theta_over_sin_theta = theta/sin_theta
+            if abs(sin_theta) > 1.0e-6:
+                theta_over_sin_theta = theta/sin_theta
+            else:
+                theta_over_sin_theta = 1
             omega_SE3 = np.array((dR[2, 1] - dR[1, 2], dR[0, 2] - dR[2, 0], dR[1, 0] - dR[0, 1]))/2.0
+            v_bodyframe = np.matmul(R.T, velocity)
+            w_bodyframe = np.matmul(R.T, omega_SE3)
+            #training_data['data'][row, 12:15] = velocity
+            training_data['data'][row, 12:15] = v_bodyframe
             # if abs(velocity[0] - T_delta12[0, 3]) > 1.0e-5:
             #     print("Error! " + str(velocity[0] - T_delta12[0, 3]))
-            training_data['data'][row, 15:18] = omega_SE3
+            # training_data['data'][row, 15:18] = omega_SE3
+            training_data['data'][row, 15:18] = w_bodyframe
             #  V_batt
             # training_data[row, 19] = data_set[row, 22]
             #  dutyR, dutyL
-            training_data['data'][row, 18:20] = data_set[row, 14:16]
+            training_data['data'][row, 18] = data_set[row, 14] + data_set[row, 15]
+            training_data['data'][row, 19] = data_set[row, 14] - data_set[row, 15]
             position_prev = position
             T_prev = T_cur
 
+    scalef = 10
+    subsample = 10
+    plt.figure()
+    plt.plot(training_data['data'][:, 0],training_data['data'][:, 1])
+    plt.quiver(training_data['data'][::subsample, 0], training_data['data'][::subsample, 1],
+               scalef*training_data['data'][::subsample, 12], scalef*training_data['data'][::subsample, 13])
+    plt.quiver(training_data['data'][::subsample, 0], training_data['data'][::subsample, 1],
+               -training_data['data'][::subsample, 17]*training_data['data'][::subsample, 13],
+               training_data['data'][::subsample, 17]*training_data['data'][::subsample, 12], color='r')
+    #plt.show()
+    plt.draw()
+    plt.pause(0.001)
+
+    from scipy.signal import savgol_filter
+    training_data_smooth = { 'data': {}}
+    training_data_smooth['data'] = training_data['data'].copy()
+    smoothing_channels = (0, 1, 2, 12, 13, 14, 15, 16, 17, 18, 19)
+    for smoothing_channel_idx in smoothing_channels:
+        # training_data_smooth['data'][:, smoothing_channel_idx] = savgol_filter(training_data['data'][:, smoothing_channel_idx], 7, 3)
+        training_data_smooth['data'][:, smoothing_channel_idx] = savgol_filter(training_data['data'][:, smoothing_channel_idx], 51, 3)
+
+    # Create two subplots and unpack the output array immediately
+    idxs = range(0,len(training_data))
+
+    fv, subplot_axes_v = plt.subplots(3,1)
+    subplot_axes_v[0].plot(training_data['data'][:, 12], 'r', label='v_x')
+    subplot_axes_v[1].plot(training_data['data'][:, 13], 'r', label='v_y')
+    subplot_axes_v[2].plot(training_data['data'][:, 14], 'r', label='v_z')
+    subplot_axes_v[0].plot(training_data_smooth['data'][:, 12], 'b', label='smoothed v_x')
+    subplot_axes_v[1].plot(training_data_smooth['data'][:, 13], 'b', label='smoothed v_y')
+    subplot_axes_v[2].plot(training_data_smooth['data'][:, 14], 'b', label='smoothed v_z')
+    plt.draw()
+    plt.pause(0.001)
+
+    f_w, subplot_axes = plt.subplots(3,1)
+    subplot_axes[0].plot(training_data['data'][:, 15], 'r', label='dw_x')
+    subplot_axes[1].plot(training_data['data'][:, 16], 'r', label='dw_y')
+    subplot_axes[2].plot(training_data['data'][:, 17], 'r', label='dw_z')
+    subplot_axes[0].plot(training_data_smooth['data'][:, 15], 'b', label='smoothed dw_x')
+    subplot_axes[1].plot(training_data_smooth['data'][:, 16], 'b', label='smoothed dw_y')
+    subplot_axes[2].plot(training_data_smooth['data'][:, 17], 'b', label='smoothed dw_z')
+    plt.draw()
+    plt.pause(0.001)
+
+    f_input, subplot_axes_input = plt.subplots(2,1)
+    subplot_axes_input[0].plot(training_data['data'][:, 18], 'r', label='inputL')
+    subplot_axes_input[1].plot(training_data['data'][:, 19], 'r', label='inputR')
+    subplot_axes_input[0].plot(training_data_smooth['data'][:, 18], 'b', label='smoothed inputL')
+    subplot_axes_input[1].plot(training_data_smooth['data'][:, 19], 'b', label='smoothed inputR')
+    plt.draw()
+    plt.pause(0.001)
 
     non_zero_input_indices = np.nonzero(training_data['input_valid'])
     EXPERIMENT_NUMSAMPLES = 5
@@ -175,24 +236,37 @@ def train(args):
     num_experiments = (num_samples-trim)/EXPERIMENT_NUMSAMPLES
     num_experiments = int(num_experiments)
     training_data['data'] = training_data['data'][trim:]
-    experiments = np.zeros((EXPERIMENT_NUMSAMPLES, num_experiments, 20))
     deleteIndices = []
     for experimentIdx in range(0, num_experiments):
-        if np.all(training_data['data_valid'][experimentIdx*EXPERIMENT_NUMSAMPLES:((experimentIdx+1)*EXPERIMENT_NUMSAMPLES)]):
-            experiments[:, experimentIdx, :] = training_data['data'][experimentIdx*EXPERIMENT_NUMSAMPLES:((experimentIdx+1)*EXPERIMENT_NUMSAMPLES),:]
-        else:
+        if not np.all(training_data['data_valid'][experimentIdx*EXPERIMENT_NUMSAMPLES:((experimentIdx+1)*EXPERIMENT_NUMSAMPLES)]):
+            #experiments[:, experimentIdx, :] = training_data_smooth['data'][experimentIdx*EXPERIMENT_NUMSAMPLES:((experimentIdx+1)*EXPERIMENT_NUMSAMPLES),:]
+            #experiments.(training_data_smooth['data'][experimentIdx*EXPERIMENT_NUMSAMPLES:((experimentIdx+1)*EXPERIMENT_NUMSAMPLES),:])
+            # else:
+            print("Deleting experiment " + str(experimentIdx))
             deleteIndices.append(experimentIdx)
 
-    for idx in range(0, len(deleteIndices)):
-        print("Deleting experiment " + str(deleteIndices[idx]))
-        np.delete(experiments, deleteIndices[idx], axis=1)
+    MAX_EXPERIMENTS = 5600
+    num_available_experiments = num_experiments-len(deleteIndices)
+    num_experiments = min(num_available_experiments, MAX_EXPERIMENTS)
+
+    experiments = np.zeros((EXPERIMENT_NUMSAMPLES, num_experiments, 20))
+    filteredIdx = 0
+    for experimentIdx in range(0, num_available_experiments):
+        if deleteIndices.count(experimentIdx) == 0:
+            experiments[:, filteredIdx, :] = training_data['data'][experimentIdx*EXPERIMENT_NUMSAMPLES:((experimentIdx+1)*EXPERIMENT_NUMSAMPLES),:]
+            # experiments[:, filteredIdx, :] = training_data_smooth['data'][experimentIdx*EXPERIMENT_NUMSAMPLES:((experimentIdx+1)*EXPERIMENT_NUMSAMPLES),:]
+            filteredIdx += 1
+            if filteredIdx == MAX_EXPERIMENTS:
+                break
+
 
     delta_t = np.mean(np.diff(t_eval))
     experiment_times = np.linspace(0,(EXPERIMENT_NUMSAMPLES-1)*delta_t, EXPERIMENT_NUMSAMPLES)
 
-    test_split = 0.8
-    samples = training_data['data'].shape[1]
-    split_ix = int(samples * test_split)
+    pct_train_samples_split = 0.9
+    # samples = training_data['data'].shape[1]
+    samples = experiments.shape[1]
+    split_ix = max(1, int(samples * pct_train_samples_split))
     # split_ix = int(EXPERIMENT_NUMSAMPLES * test_split)
     split_data = {}
 
@@ -216,6 +290,7 @@ def train(args):
     # split_data['x'], split_data['test_x'] = training_data['data'][:split_ix, :], training_data['data'][split_ix:, :]
     # split_data['t_train'], split_data['t_test'] = t_eval[:split_ix], t_eval[split_ix:]
     split_data['x'], split_data['test_x'] = experiments[:, :split_ix, :], experiments[:, split_ix:, :]
+    # split_data['test_x'], split_data['x'] = experiments[:, :split_ix, :], experiments[:, split_ix:, :]
     split_data['t_train'], split_data['t_test'] = experiment_times[:split_ix], experiment_times[split_ix:]
     data = split_data
     # data['t'] = tspan
@@ -239,6 +314,7 @@ def train(args):
     stats = {'train_loss': [], 'test_loss': [], 'forward_time': [], 'backward_time': [], 'nfe': [], 'train_x_loss': [],\
              'test_x_loss':[], 'train_v_loss': [], 'test_v_loss': [], 'train_w_loss': [], 'test_w_loss': [], 'train_geo_loss':[], 'test_geo_loss':[]}
     # Start training
+    plt.figure()
     for step in range(0,args.total_steps + 1):
         #print(step)
         train_loss = 0
@@ -305,6 +381,14 @@ def train(args):
         stats['forward_time'].append(forward_time)
         stats['backward_time'].append(backward_time)
         stats['nfe'].append(model.nfe)
+
+        if step % (args.print_every/2) == 0 and len(stats['train_loss']) > 10:
+            line_width = 4
+            plt.plot(stats['train_loss'], 'b', linewidth=line_width, label='train loss')
+            plt.plot(stats['test_loss'], 'r--', linewidth=line_width, label='test loss')
+            plt.draw()
+            plt.pause(0.001)
+
         if step % args.print_every == 0:
             print("step {}, train_loss {:.4e}, test_loss {:.4e}".format(step, train_loss.item(), test_loss.item()))
             print("step {}, train_x_loss {:.4e}, test_x_loss {:.4e}".format(step, train_x_loss.item(),
