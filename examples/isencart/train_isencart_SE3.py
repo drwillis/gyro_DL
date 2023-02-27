@@ -16,6 +16,7 @@ from data_collection import get_dataset, arrange_data
 from se3hamneuralode import to_pickle, pose_L2_geodesic_loss, traj_pose_L2_geodesic_loss
 import time
 import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))+'/data'
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,9 +24,9 @@ sys.path.append(PARENT_DIR)
 
 def get_args():
     parser = argparse.ArgumentParser(description=None)
-    parser.add_argument('--learn_rate', default=5e-6, type=float, help='learning rate')
+    parser.add_argument('--learn_rate', default=5e-4, type=float, help='learning rate')
     parser.add_argument('--nonlinearity', default='tanh', type=str, help='neural net nonlinearity')
-    parser.add_argument('--total_steps', default=500, type=int, help='number of gradient steps')
+    parser.add_argument('--total_steps', default=100, type=int, help='number of gradient steps')
     parser.add_argument('--print_every', default=10, type=int, help='number of gradient steps between prints')
     parser.add_argument('--name', default='isencart', type=str, help='only one option right now')
     parser.add_argument('--verbose', dest='verbose', action='store_true', help='verbose?')
@@ -45,14 +46,177 @@ def get_model_parm_nums(model):
 
 
 def get_marker_coords(dataset_row):
-    return np.array([[dataset_row[0],dataset_row[2],dataset_row[1]],
-                     [dataset_row[3],dataset_row[5],dataset_row[4]],
-                     [dataset_row[6],dataset_row[8],dataset_row[7]],
-                     [dataset_row[9],dataset_row[11],dataset_row[10]]])/1000
+    return np.array([[dataset_row[2], dataset_row[0], dataset_row[1]],
+                     [dataset_row[5], dataset_row[3], dataset_row[4]],
+                     [dataset_row[8], dataset_row[6], dataset_row[7]],
+                     [dataset_row[11], dataset_row[9], dataset_row[10]]])/1000
     # return np.array([dataset_row[0:3:1],
     #                  dataset_row[3:6:1],
     #                  dataset_row[6:9:1],
     #                  dataset_row[9:12:1]])
+
+def process_data(data_set, t_eval, reference_coordinate_sys_points = None):
+    training_data = {}
+    ALIGNMENT_ERROR_TOLERANCE = 0.008 #
+
+    # delete marker ID fields for Marker 4, Marker 3, Marker 2, Marker 1 respectively
+    data_set = np.delete(data_set, 13, axis=1)
+    data_set = np.delete(data_set, 9, axis=1)
+    data_set = np.delete(data_set, 5, axis=1)
+    data_set = np.delete(data_set, 1, axis=1)
+    data_set = np.delete(data_set, 0, axis=1)
+
+    # data_set = np.delete(data_set, np.s_[2000::], axis=0)
+
+    if reference_coordinate_sys_points is None:
+        reference_coordinate_sys_points = get_marker_coords(data_set[0, :])
+
+    training_data['data'] = np.zeros((data_set.shape[0], 20), dtype=np.float64)
+    training_data['time'] = np.zeros((data_set.shape[0], 1), dtype=np.float64)
+    training_data['input_valid'] = np.zeros((data_set.shape[0], 1), dtype=bool)
+    training_data['data_valid'] = np.ones((data_set.shape[0], 1), dtype=bool)
+    # CONVERT DATA TO x,R,dx,dR,Vbatt,dutyL,dutyR
+    # p_x = np.mean(data_set[:, 0:10:3], axis=1)
+    # p_y = np.mean(data_set[:, 1:11:3], axis=1)
+    # p_z = np.mean(data_set[:, 2:12:3], axis=1)
+    #
+    # v_x = np.concatenate([[0], np.diff(p_x)], axis=0)
+    # v_y = np.concatenate([[0], np.diff(p_y)], axis=0)
+    # v_z = np.concatenate([[0], np.diff(p_z)], axis=0)
+
+    from ralign import ralign, similarity_transform
+    R_bodyframe = np.eye(3)
+    R_0 = None
+    T_prev = np.eye(4)
+    R_prev = np.eye(3)
+    measured_coordinate_sys_points_cur = get_marker_coords(data_set[0, :]).copy()
+    coord_sys_origin = measured_coordinate_sys_points_cur.mean(axis=0)
+    position_prev = coord_sys_origin
+    for row in range(data_set.shape[0]):
+        measured_coordinate_sys_points_cur = get_marker_coords(data_set[row, :])
+        # R, c, t = ralign(reference_coordinate_sys_points.T, measured_coordinate_sys_points_cur.T)
+        R_cur, c, t = similarity_transform(reference_coordinate_sys_points, measured_coordinate_sys_points_cur)
+        if R_0 is None:
+            R_0 = R_cur
+        # print("t = " + str(t-coord_sys_origin))
+        if abs(c - 1.0) > 1.0e-1:
+            print("Error! Invalid scale! c = " + str(c))
+            training_data['data_valid'][row] = False
+        T_cur = np.concatenate((np.concatenate([R_cur, t.reshape(3, 1)], axis=1), [[0, 0, 0, 1.0]]), axis=0)
+        # if (row==0):
+        #     dR, dc, dt = np.eye(3), 1.0, np.zeros(3)
+        # else:
+        #     measured_coordinate_sys_points_prev = get_marker_coords(data_set[row - 1, :])
+        #     dR, dc, dt = ralign(measured_coordinate_sys_points_prev.T, measured_coordinate_sys_points_cur.T)
+        T_delta12 = T_cur @ np.linalg.inv(T_prev)
+        dR = T_delta12[:3, :3]
+        dR = R_cur @ R_prev.T
+        transformed_points = np.concatenate([measured_coordinate_sys_points_cur, [[1], [1], [1], [1]]],
+                                            axis=1) @ T_delta12.T
+        transformed_points2 = np.concatenate([reference_coordinate_sys_points, [[1], [1], [1], [1]]], axis=1) @ T_cur.T
+        pt_errors = measured_coordinate_sys_points_cur - transformed_points2[:, :3]
+        # if row == 62 or row == 63:
+        #     aaa = 1
+        if (1 / 4) * np.sum(np.sqrt(np.sum(pt_errors ** 2, axis=1))) > ALIGNMENT_ERROR_TOLERANCE:
+            print("Bad data detected at row " + str(row))
+            print("average pt error = " + str((1 / 4) * np.sum(np.sqrt(np.sum(pt_errors ** 2, axis=1)))))
+            training_data['data_valid'][row] = False
+        else:
+            training_data['data_valid'][row] = True
+        # print("Rotation matrix=\n", R, "\nScaling coefficient=", c, "\nTranslation vector=", t)
+        # print("derivative Rotation matrix=\n", dR, "\nScaling coefficient=", dc, "\nTranslation vector=", dt)
+        position = measured_coordinate_sys_points_cur.mean(axis=0)
+        # print("position="+str(position))
+        velocity = position - position_prev
+        velocity2 = T_delta12[:3, 3].T
+        training_data['time'] = t_eval[row]
+        # if data_set[row, 14] != 0 or data_set[row, 15] != 0:
+        # if abs(data_set[row, 14]) > 0.1 or abs(data_set[row, 15]) > 0.1:
+        if data_set[row, 14] > 0.1 and data_set[row, 15] > 0.1:
+            training_data['input_valid'][row] = True
+        else:
+            training_data['input_valid'][row] = False
+            # training_data['data_valid'][row] = False
+        training_data['data'][row, 0:3] = position
+        training_data['data'][row, 3:12] = R_cur.flatten()
+        theta = np.arccos((np.trace(R_cur) - 1) / 2.0)
+        sin_theta = np.sin(theta)
+        if abs(sin_theta) > 1.0e-6:
+            theta_over_sin_theta = theta / sin_theta
+        else:
+            theta_over_sin_theta = 1
+        omega_SE3 = np.array((dR[2, 1] - dR[1, 2], dR[0, 2] - dR[2, 0], dR[1, 0] - dR[0, 1])) / 2.0
+        if np.linalg.norm(velocity) > 1.0e-3 and np.linalg.norm(position - coord_sys_origin) > 0.5:
+            aaa = 1
+        # v_bodyframe = R_prev.T @ velocity
+        # w_bodyframe = R_prev.T @ omega_SE3
+        v_bodyframe = dR @ np.array([np.linalg.norm(velocity), 0, 0, ])
+        # v_bodyframe = R_cur.T @ velocity
+        # w_bodyframe = R_cur.T @ omega_SE3
+        w_bodyframe = omega_SE3
+        # training_data['data'][row, 12:15] = velocity
+        training_data['data'][row, 12:15] = v_bodyframe
+        # if abs(velocity[0] - T_delta12[0, 3]) > 1.0e-5:
+        #     print("Error! " + str(velocity[0] - T_delta12[0, 3]))
+        # training_data['data'][row, 15:18] = omega_SE3
+        training_data['data'][row, 15:18] = w_bodyframe
+        #  V_batt
+        # training_data[row, 19] = data_set[row, 22]
+        #  dutyR, dutyL
+        training_data['data'][row, 18] = data_set[row, 14] + data_set[row, 15]
+        training_data['data'][row, 19] = data_set[row, 14] - data_set[row, 15]
+        position_prev = position
+        T_prev = T_cur
+        R_prev = R_cur
+    return training_data, reference_coordinate_sys_points
+
+def process_data2(data_set, t_eval, reference_coordinate_sys_points = None):
+    training_data = {}
+
+    training_data['data'] = np.zeros((data_set.shape[0], 20), dtype=np.float64)
+    training_data['time'] = np.zeros((data_set.shape[0], 1), dtype=np.float64)
+    training_data['input_valid'] = np.zeros((data_set.shape[0], 1), dtype=bool)
+    training_data['data_valid'] = np.ones((data_set.shape[0], 1), dtype=bool)
+    coord_sys_origin = np.array([0, 0, 0])
+    R_prev = np.eye(3)
+    position_prev = data_set[0, 0:3]
+    for row in range(data_set.shape[0]):
+        position_cur = data_set[row, 0:3]
+        training_data['data'][row, 0:3] = position_cur
+        velocity = position_cur - position_prev
+        quat = data_set[row,3:7]
+        if abs(np.linalg.norm(quat)-1) > 1.0e-5:
+            aa = 1
+        R_cur = Rotation.from_quat(quat).as_matrix()
+        dR = R_cur @ R_prev.T
+        training_data['data'][row, 3:12] = R_cur.flatten()
+        theta = np.arccos((np.trace(R_cur) - 1) / 2.0)
+        sin_theta = np.sin(theta)
+        if abs(sin_theta) > 1.0e-6:
+            theta_over_sin_theta = theta / sin_theta
+        else:
+            theta_over_sin_theta = 1
+        # omega_SE3 = np.array((dR[2, 1] - dR[1, 2], dR[0, 2] - dR[2, 0], dR[1, 0] - dR[0, 1])) / 2.0
+        omega_SE3 = data_set[row, 7:10]
+        if np.linalg.norm(velocity) > 1.0e-3 and np.linalg.norm(position_prev - coord_sys_origin) > 0.5:
+            aaa = 1
+        # v_bodyframe = dR @ np.array([np.linalg.norm(velocity), 0, 0, ])
+        v_bodyframe = R_cur.T @ velocity
+        w_bodyframe = R_cur.T @ omega_SE3
+        # training_data['data'][row, 12:15] = velocity
+        training_data['data'][row, 12:15] = v_bodyframe
+        # if abs(velocity[0] - T_delta12[0, 3]) > 1.0e-5:
+        #     print("Error! " + str(velocity[0] - T_delta12[0, 3]))
+        # training_data['data'][row, 15:18] = omega_SE3
+        training_data['data'][row, 15:18] = w_bodyframe
+        #  dutyR, dutyL
+        training_data['data'][row, 18] = data_set[row, 12] + data_set[row, 13]
+        training_data['data'][row, 19] = data_set[row, 12] - data_set[row, 13]
+        R_prev = R_cur
+        position_prev = position_cur
+
+    return training_data, reference_coordinate_sys_points
+
 
 def train(args):
 
@@ -67,128 +231,47 @@ def train(args):
     # Collect data
     # data = get_dataset(test_split=0.8, save_dir=args.save_dir)
 
-    # data_file_list = ['data/data_1.txt']
-    # data_file_list = ['data/data_2.txt']
-    data_file_list = ['data/data_3.txt']
-    # data_file_list = ['data/data_1.txt', 'data/data_2.txt', 'data/data_3.txt', 'data/data_4.txt']
-    reference_coordinate_sys_points = None
+    if True:
+        # data_file_list = ['data/data_1.txt']
+        # data_file_list = ['data/data_2.txt']
+        data_file_list = ['data/data_3.txt']
+        # data_file_list = ['data/data_1.txt', 'data/data_2.txt', 'data/data_3.txt', 'data/data_4.txt']
+        reference_coordinate_sys_points = None
 
-    training_data = {}
-    ALIGNMENT_ERROR_TOLERANCE = 0.008 #
-
-    for data_file in data_file_list:
-        data_set = pd.read_csv(data_file).to_numpy()
-
-        t_eval = data_set[:, 0]
-        t_eval = t_eval - t_eval[0]
-
-        # delete first row of zeros
-        data_set = np.delete(data_set, 0, axis=0)
-
-        # delete marker ID fields for Marker 4, Marker 3, Marker 2, Marker 1 respectively
-        data_set = np.delete(data_set, 13, axis=1)
-        data_set = np.delete(data_set, 9, axis=1)
-        data_set = np.delete(data_set, 5, axis=1)
-        data_set = np.delete(data_set, 1, axis=1)
-        data_set = np.delete(data_set, 0, axis=1)
-        if reference_coordinate_sys_points is None:
-            reference_coordinate_sys_points = get_marker_coords(data_set[0, :])
-
-        training_data['data'] = np.zeros((data_set.shape[0], 20), dtype=np.float64)
-        training_data['time'] = np.zeros((data_set.shape[0], 1), dtype=np.float64)
-        training_data['input_valid'] = np.zeros((data_set.shape[0], 1), dtype=bool)
-        training_data['data_valid'] = np.ones((data_set.shape[0], 1), dtype=bool)
-        # CONVERT DATA TO x,R,dx,dR,Vbatt,dutyL,dutyR
-        # p_x = np.mean(data_set[:, 0:10:3], axis=1)
-        # p_y = np.mean(data_set[:, 1:11:3], axis=1)
-        # p_z = np.mean(data_set[:, 2:12:3], axis=1)
-        #
-        # v_x = np.concatenate([[0], np.diff(p_x)], axis=0)
-        # v_y = np.concatenate([[0], np.diff(p_y)], axis=0)
-        # v_z = np.concatenate([[0], np.diff(p_z)], axis=0)
-
-        from ralign import ralign, similarity_transform
-        T_prev = np.eye(4)
-        measured_coordinate_sys_points_cur = get_marker_coords(data_set[0, :])
-        coord_sys_origin = measured_coordinate_sys_points_cur.mean(axis=0)
-        position_prev = coord_sys_origin
-        for row in range(data_set.shape[0]):
-            measured_coordinate_sys_points_cur = get_marker_coords(data_set[row, :])
-            # R, c, t = ralign(reference_coordinate_sys_points.T, measured_coordinate_sys_points_cur.T)
-            R, c, t = similarity_transform(reference_coordinate_sys_points, measured_coordinate_sys_points_cur)
-            # print("t = " + str(t-coord_sys_origin))
-            if abs(c-1.0) > 1.0e-1:
-                print("Error! Invalid scale! c = " + str(c))
-                training_data['data_valid'][row] = False
-            T_cur = np.concatenate((np.concatenate([R, t.reshape(3, 1)], axis=1), [[0, 0, 0, 1.0]]), axis=0)
-            # if (row==0):
-            #     dR, dc, dt = np.eye(3), 1.0, np.zeros(3)
-            # else:
-            #     measured_coordinate_sys_points_prev = get_marker_coords(data_set[row - 1, :])
-            #     dR, dc, dt = ralign(measured_coordinate_sys_points_prev.T, measured_coordinate_sys_points_cur.T)
-            T_delta12 = T_cur @ np.linalg.inv(T_prev)
-            dR = T_delta12[:3, :3]
-            transformed_points = np.concatenate([measured_coordinate_sys_points_cur, [[1], [1], [1], [1]]], axis=1) @ T_delta12.T
-            transformed_points2 = np.concatenate([reference_coordinate_sys_points, [[1], [1], [1], [1]]], axis=1) @ T_cur.T
-            pt_errors = measured_coordinate_sys_points_cur - transformed_points2[:, :3]
-            # if row == 62 or row == 63:
-            #     aaa = 1
-            if (1/4)*np.sum(np.sqrt(np.sum(pt_errors**2, axis=1))) > ALIGNMENT_ERROR_TOLERANCE:
-                print("Bad data detected at row " + str(row))
-                print("average pt error = " + str((1/4)*np.sum(np.sqrt(np.sum(pt_errors**2, axis=1)))))
-                training_data['data_valid'][row] = False
-            else:
-                training_data['data_valid'][row] = True
-            # print("Rotation matrix=\n", R, "\nScaling coefficient=", c, "\nTranslation vector=", t)
-            # print("derivative Rotation matrix=\n", dR, "\nScaling coefficient=", dc, "\nTranslation vector=", dt)
-            position = measured_coordinate_sys_points_cur.mean(axis=0)
-            # print("position="+str(position))
-            velocity = position - position_prev
-            velocity2 = T_delta12[:3, 3].T
-            training_data['time'] = t_eval[row]
-            # if data_set[row, 14] != 0 or data_set[row, 15] != 0:
-            if data_set[row, 14] > 0.5 or data_set[row, 15] > 0.5:
-                training_data['input_valid'][row] = True
-            else:
-                training_data['input_valid'][row] = False
-                # training_data['data_valid'][row] = False
-            training_data['data'][row, 0:3] = position
-            training_data['data'][row, 3:12] = R.flatten()
-            theta = np.arccos((np.trace(R) - 1)/2.0)
-            sin_theta = np.sin(theta)
-            if abs(sin_theta) > 1.0e-6:
-                theta_over_sin_theta = theta/sin_theta
-            else:
-                theta_over_sin_theta = 1
-            omega_SE3 = np.array((dR[2, 1] - dR[1, 2], dR[0, 2] - dR[2, 0], dR[1, 0] - dR[0, 1]))/2.0
-            v_bodyframe = np.matmul(R.T, velocity)
-            w_bodyframe = np.matmul(R.T, omega_SE3)
-            #training_data['data'][row, 12:15] = velocity
-            training_data['data'][row, 12:15] = v_bodyframe
-            # if abs(velocity[0] - T_delta12[0, 3]) > 1.0e-5:
-            #     print("Error! " + str(velocity[0] - T_delta12[0, 3]))
-            # training_data['data'][row, 15:18] = omega_SE3
-            training_data['data'][row, 15:18] = w_bodyframe
-            #  V_batt
-            # training_data[row, 19] = data_set[row, 22]
-            #  dutyR, dutyL
-            training_data['data'][row, 18] = data_set[row, 14] + data_set[row, 15]
-            training_data['data'][row, 19] = data_set[row, 14] - data_set[row, 15]
-            position_prev = position
-            T_prev = T_cur
+        for data_file in data_file_list:
+            data_set = pd.read_csv(data_file).to_numpy()
+            # delete first row of zeros
+            data_set = np.delete(data_set, 0, axis=0)
+            t_eval = data_set[:, 0].copy()
+            t_eval = t_eval - t_eval[0]
+            training_data, reference_coordinate_sys_points = process_data(data_set, t_eval, reference_coordinate_sys_points)
+    else:
+        data_file_list = ['data/fixed_data2_3.txt']
+        reference_coordinate_sys_points = None
+        for data_file in data_file_list:
+            data_set = pd.read_csv(data_file).to_numpy()
+            # delete first row of zeros
+            data_set = np.delete(data_set, 0, axis=0)
+            t_eval = data_set[:, 0]
+            t_eval = t_eval - t_eval[0]
+            data_set = np.delete(data_set, 0, axis=1)
+            training_data, reference_coordinate_sys_points = process_data2(data_set, t_eval, reference_coordinate_sys_points)
 
     scalef = 10
     subsample = 10
     plt.figure()
-    plt.plot(training_data['data'][:, 0],training_data['data'][:, 1])
-    plt.quiver(training_data['data'][::subsample, 0], training_data['data'][::subsample, 1],
-               scalef*training_data['data'][::subsample, 12], scalef*training_data['data'][::subsample, 13])
-    plt.quiver(training_data['data'][::subsample, 0], training_data['data'][::subsample, 1],
-               -training_data['data'][::subsample, 17]*training_data['data'][::subsample, 13],
-               training_data['data'][::subsample, 17]*training_data['data'][::subsample, 12], color='r')
-    #plt.show()
-    plt.draw()
-    plt.pause(0.001)
+    for endIdx in range(50,training_data['data'].shape[0], 1000):
+        plt.plot(training_data['data'][:endIdx, 0],training_data['data'][:endIdx, 1])
+        plt.quiver(training_data['data'][::subsample, 0], training_data['data'][::subsample, 1],
+                   # scalef*training_data['data'][::subsample, 3], scalef*training_data['data'][::subsample, 6])
+                   scalef * training_data['data'][::subsample, 12], scalef * training_data['data'][::subsample, 13])
+        plt.quiver(training_data['data'][::subsample, 0], training_data['data'][::subsample, 1],
+                   -training_data['data'][::subsample, 17]*training_data['data'][::subsample, 13],
+                   training_data['data'][::subsample, 17]*training_data['data'][::subsample, 12], color='r')
+        #plt.show()
+        plt.axis('equal')
+        plt.draw()
+        plt.pause(0.15)
 
     from scipy.signal import savgol_filter
     training_data_smooth = { 'data': {}}
@@ -263,7 +346,7 @@ def train(args):
     delta_t = np.mean(np.diff(t_eval))
     experiment_times = np.linspace(0,(EXPERIMENT_NUMSAMPLES-1)*delta_t, EXPERIMENT_NUMSAMPLES)
 
-    pct_train_samples_split = 0.9
+    pct_train_samples_split = 0.5
     # samples = training_data['data'].shape[1]
     samples = experiments.shape[1]
     split_ix = max(1, int(samples * pct_train_samples_split))
