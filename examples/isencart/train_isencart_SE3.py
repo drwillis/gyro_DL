@@ -221,8 +221,8 @@ def process_data2(data_set, t_eval, reference_coordinate_sys_points = None):
         # training_data['data'][row, 15:18] = omega_SE3
         training_data['data'][row, 15:18] = w_bodyframe
         #  dutyR, dutyL
-        training_data['data'][row, 18] = data_set[row, 13] + data_set[row, 14]
-        training_data['data'][row, 19] = data_set[row, 13] - data_set[row, 14]
+        training_data['data'][row, 18] = data_set[row, 13]
+        training_data['data'][row, 19] = data_set[row, 14]
         R_prev = R_cur
         position_prev = position_cur
 
@@ -241,7 +241,7 @@ def train(args):
 
     # Collect data
     # data = get_dataset(test_split=0.8, save_dir=args.save_dir)
-    USE_RAW_DATASET = False
+    USE_RAW_DATASET = True
 
     if USE_RAW_DATASET:
         # data_file_list = ['data/data_1.txt']
