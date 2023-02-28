@@ -26,7 +26,7 @@ def get_args():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--learn_rate', default=5e-4, type=float, help='learning rate')
     parser.add_argument('--nonlinearity', default='tanh', type=str, help='neural net nonlinearity')
-    parser.add_argument('--total_steps', default=100, type=int, help='number of gradient steps')
+    parser.add_argument('--total_steps', default=500, type=int, help='number of gradient steps')
     parser.add_argument('--print_every', default=10, type=int, help='number of gradient steps between prints')
     parser.add_argument('--name', default='isencart', type=str, help='only one option right now')
     parser.add_argument('--verbose', dest='verbose', action='store_true', help='verbose?')
@@ -92,7 +92,10 @@ def process_data(data_set, t_eval, reference_coordinate_sys_points = None):
     measured_coordinate_sys_points_cur = get_marker_coords(data_set[0, :]).copy()
     coord_sys_origin = measured_coordinate_sys_points_cur.mean(axis=0)
     position_prev = coord_sys_origin
+    dt = t_eval[1] - t_eval[0]
     for row in range(data_set.shape[0]):
+        if row > 0:
+            dt = t_eval[row] - t_eval[row-1]
         measured_coordinate_sys_points_cur = get_marker_coords(data_set[row, :])
         # R, c, t = ralign(reference_coordinate_sys_points.T, measured_coordinate_sys_points_cur.T)
         R_cur, c, t = similarity_transform(reference_coordinate_sys_points, measured_coordinate_sys_points_cur)
@@ -127,7 +130,7 @@ def process_data(data_set, t_eval, reference_coordinate_sys_points = None):
         # print("derivative Rotation matrix=\n", dR, "\nScaling coefficient=", dc, "\nTranslation vector=", dt)
         position = measured_coordinate_sys_points_cur.mean(axis=0)
         # print("position="+str(position))
-        velocity = position - position_prev
+        velocity = (position - position_prev) / dt
         velocity2 = T_delta12[:3, 3].T
         training_data['time'] = t_eval[row]
         # if data_set[row, 14] != 0 or data_set[row, 15] != 0:
@@ -145,15 +148,19 @@ def process_data(data_set, t_eval, reference_coordinate_sys_points = None):
             theta_over_sin_theta = theta / sin_theta
         else:
             theta_over_sin_theta = 1
-        omega_SE3 = np.array((dR[2, 1] - dR[1, 2], dR[0, 2] - dR[2, 0], dR[1, 0] - dR[0, 1])) / 2.0
+        omega_SE3 = np.array((dR[2, 1] - dR[1, 2], dR[0, 2] - dR[2, 0], dR[1, 0] - dR[0, 1])) / (2.0 * dt)
         if np.linalg.norm(velocity) > 1.0e-3 and np.linalg.norm(position - coord_sys_origin) > 0.5:
             aaa = 1
         # v_bodyframe = R_prev.T @ velocity
         # w_bodyframe = R_prev.T @ omega_SE3
-        v_bodyframe = dR @ np.array([np.linalg.norm(velocity), 0, 0, ])
-        # v_bodyframe = R_cur.T @ velocity
-        # w_bodyframe = R_cur.T @ omega_SE3
-        w_bodyframe = omega_SE3
+        # v_bodyframe = dR @ np.array([np.linalg.norm(velocity), 0, 0, ])
+        # omega_SE3 = omega_SE3 / dt
+        # v_bodyframe = dR @ np.array([(1-omega_SE3[2])*np.linalg.norm(velocity), omega_SE3[2]*np.linalg.norm(velocity), 0])
+        v_bodyframe = R_cur.T @ velocity
+        v_bodyframe[1] = -v_bodyframe[1]
+        w_bodyframe = R_cur.T @ omega_SE3
+        w_bodyframe[1] = -w_bodyframe[1]
+        # w_bodyframe = omega_SE3
         # training_data['data'][row, 12:15] = velocity
         training_data['data'][row, 12:15] = v_bodyframe
         # if abs(velocity[0] - T_delta12[0, 3]) > 1.0e-5:
@@ -163,8 +170,9 @@ def process_data(data_set, t_eval, reference_coordinate_sys_points = None):
         #  V_batt
         # training_data[row, 19] = data_set[row, 22]
         #  dutyR, dutyL
-        training_data['data'][row, 18] = data_set[row, 14] + data_set[row, 15]
-        training_data['data'][row, 19] = data_set[row, 14] - data_set[row, 15]
+        # training_data['data'][row, 18] = 0.01*(data_set[row, 14]**2 + data_set[row, 15]**2)
+        training_data['data'][row, 18] = data_set[row, 14]
+        training_data['data'][row, 19] = data_set[row, 15]
         position_prev = position
         T_prev = T_cur
         R_prev = R_cur
@@ -180,10 +188,13 @@ def process_data2(data_set, t_eval, reference_coordinate_sys_points = None):
     coord_sys_origin = np.array([0, 0, 0])
     R_prev = np.eye(3)
     position_prev = data_set[0, 0:3]
+    dt = t_eval[1] - t_eval[0]
     for row in range(data_set.shape[0]):
+        if row > 0:
+            dt = t_eval[row] - t_eval[row-1]
         position_cur = data_set[row, 0:3]
         training_data['data'][row, 0:3] = position_cur
-        velocity = position_cur - position_prev
+        velocity = (position_cur - position_prev) / dt
         quat = data_set[row,3:7]
         if abs(np.linalg.norm(quat)-1) > 1.0e-5:
             aa = 1
@@ -210,8 +221,8 @@ def process_data2(data_set, t_eval, reference_coordinate_sys_points = None):
         # training_data['data'][row, 15:18] = omega_SE3
         training_data['data'][row, 15:18] = w_bodyframe
         #  dutyR, dutyL
-        training_data['data'][row, 18] = data_set[row, 12] + data_set[row, 13]
-        training_data['data'][row, 19] = data_set[row, 12] - data_set[row, 13]
+        training_data['data'][row, 18] = data_set[row, 13] + data_set[row, 14]
+        training_data['data'][row, 19] = data_set[row, 13] - data_set[row, 14]
         R_prev = R_cur
         position_prev = position_cur
 
@@ -230,8 +241,9 @@ def train(args):
 
     # Collect data
     # data = get_dataset(test_split=0.8, save_dir=args.save_dir)
+    USE_RAW_DATASET = False
 
-    if True:
+    if USE_RAW_DATASET:
         # data_file_list = ['data/data_1.txt']
         # data_file_list = ['data/data_2.txt']
         data_file_list = ['data/data_3.txt']
@@ -328,7 +340,7 @@ def train(args):
             print("Deleting experiment " + str(experimentIdx))
             deleteIndices.append(experimentIdx)
 
-    MAX_EXPERIMENTS = 5600
+    MAX_EXPERIMENTS = 50000
     num_available_experiments = num_experiments-len(deleteIndices)
     num_experiments = min(num_available_experiments, MAX_EXPERIMENTS)
 

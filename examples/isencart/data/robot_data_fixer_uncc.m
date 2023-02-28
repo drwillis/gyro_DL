@@ -134,7 +134,7 @@ wy=Data(:,23);
 wz=Data(:,24);
 Vbatt=Data(:,28);
 
-data_array=[t,rB(1,:).',rB(2,:).',rB(3,:).',q(1,:).',q(2,:).',q(3,:).',q(4,:).',wx,wy,wz,ax,ay,az,dutyR,dutyL,Vbatt];
+data_array=[t,x',y',z',q(1,:).',q(2,:).',q(3,:).',q(4,:).',wx,wy,wz,ax,ay,az,dutyR,dutyL,Vbatt];
 filename = sprintf('fixed_data2_%s.txt',num2str(set));
 fid=fopen(filename,'w');
 %fprintf(fid,'%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\r\n','t (s)','x (m)','y (m)','z (m)','q0','q1','q2','q3','wx (rad/s)','wy (rad/s)','wz (rad/s)','ax (m/s^2)','ay (m/s^2)','az (m/s^2)','dutyR','dutyL','Vbatt (V)');
